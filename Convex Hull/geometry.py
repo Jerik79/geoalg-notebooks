@@ -2,12 +2,12 @@ from enum import Enum, auto
 import math
 import numpy as np
 
-class Or(Enum):
+class Orientation(Enum):
     LEFT = auto()
-    ON_BEFORE = auto()
-    ON_BETWEEN = auto()
-    ON_BEHIND = auto()
     RIGHT = auto()
+    BEHIND_SOURCE = auto()
+    BETWEEN = auto()
+    BEHIND_TARGET = auto()
 
 class Point:
     def __init__(self,x,y):
@@ -35,25 +35,25 @@ class Point:
     def distance(self, other: 'Point') -> float:
         return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
     
-    def orientation(self, p: 'Point', q: 'Point') -> Or:
-        if p == q:
+    def orientation(self, source: 'Point', target: 'Point') -> Orientation:
+        if source == target:
             raise ValueError("Line (segment) needs two different points")
-        val = (q.x - p.x) * (self.y - p.y) - (q.y - p.y) * (self.x - p.x)
+        val = (target.x - source.x) * (self.y - source.y) - (target.y - source.y) * (self.x - source.x)
         if val > 0.0:
-            return Or.LEFT
+            return Orientation.LEFT
         elif val < 0.0:
-            return Or.RIGHT
+            return Orientation.RIGHT
         else:
-            if p.x != q.x:
-                param = (self.x - p.x) / (q.x - p.x)
+            if source.x != target.x:
+                param = (self.x - source.x) / (target.x - source.x)
             else:
-                param = (self.y - p.y) / (q.y - p.y)
+                param = (self.y - source.y) / (target.y - source.y)
             if param < 0.0:
-                return Or.ON_BEFORE
+                return Orientation.BEHIND_SOURCE
             elif param > 1.0:
-                return Or.ON_BEHIND
+                return Orientation.BEHIND_TARGET
             else:
-                return Or.ON_BETWEEN
+                return Orientation.BETWEEN
             
 class PointRef(Point):
     def __init__(self, container: list[Point], pos: int):
