@@ -70,9 +70,9 @@ class PointRef(Point):
     @property
     def y(self):
         return self.get_point().y
-    
-    def next_ref_in_container(self) -> 'PointRef':
-        return PointRef(self.container, (self.pos+1) % len(self.container))
+
+    def get_position(self):
+        return self.pos
     
     def is_in_container(self, container: list[Point]) -> bool:
         return container is self.container
