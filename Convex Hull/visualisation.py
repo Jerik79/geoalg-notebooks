@@ -1,40 +1,31 @@
 from typing import Callable
 from ipycanvas import Canvas, MultiCanvas, hold_canvas
-from ipywidgets import Output, Button, Label, HBox
+from ipywidgets import Output, Button, Label, Checkbox, HBox, IntSlider
 from IPython.display import display
-from geometry import Point
+from geometry import Point, Polyline
 import time
 from threading import Lock
 
 class Visualisation:
     def __init__(self):
-        self.canvas = MultiCanvas(3, width=420, height=250)
+        self.width = 600
+        self.height = 250
 
-        self.canvas[2].line_width = 5
-        self.canvas[2].begin_path()
-        self.canvas[2].move_to(0, 0)
-        self.canvas[2].line_to(0, self.canvas.height)
-        self.canvas[2].line_to(self.canvas.width, self.canvas.height)
-        self.canvas[2].line_to(self.canvas.width, 0)
-        self.canvas[2].close_path()
-        self.canvas[2].stroke()
+        self.lock = Lock()
+        self.points = set()
 
-        self.canvas[0].line_width = 2
-        self.canvas[0].translate(0, self.canvas.height)
-        self.canvas[0].scale(1, -1)
+        self.out = Output(layout={'border': '1px solid black', 'width': '600px'})
 
-        self.canvas[1].fill_style = "orange"
-        self.canvas[1].translate(0, self.canvas.height)
-        self.canvas[1].scale(1, -1)
-
-        self.out = Output()
         @self.out.capture()
         def handle_mouse_down(x, y):
-            if self.lock.acquire(blocking=False):
-                self.add_points([Point(x, self.canvas.height - y)])
+            if self.lock.acquire(blocking=False):       # TODO: Does this lead to problems?
+                self.add_points([Point(x, self.height - y)])
                 self.clear_background()
                 self.lock.release()
-        self.canvas.on_mouse_down(handle_mouse_down)
+
+        self.mouse_down = handle_mouse_down
+        self.canvas = None
+        self.init_canvas()
 
         self.buttons = [Button(
             description="Clear",
@@ -42,28 +33,87 @@ class Visualisation:
             button_style="",
             tooltip="Click me"
         )]
-        clear_callback = lambda _: self.clear()
-        self.buttons[0].on_click(lambda _: self._callback_with_lock(clear_callback))
-        self.lock = Lock()
+        clear_callback = lambda _: self.clear()     # TODO: register button that creates random points
+        self.buttons[0].on_click(lambda _: self._callback_with_lock(clear_callback))       
 
-        self.points = []            # points as set; maximum size; register button that creates random points
+        self.number_label = Label("Number of points: 0 (of maximum 1000)")
+        self.runtime_label = Label(value="Runtime: ")
 
-        self.label = Label(value="Runtime: ")
+        self.checkbox = Checkbox(
+            value=False,
+            description='Animate',
+            disabled=False,
+            indent=False
+        )
 
-    def add_polygon(self, polygon: list[Point]):
-        polygon_points = [[(p.x, p.y) for p in polygon]]
-        color = [[0, 0, 255]]
+        self.animation_started = False
+
+        self.slider = IntSlider(
+            value=5,
+            min=1,
+            max=10,
+            step=1,
+            description = "Speed",
+            disabled = False,
+        )
+
+    def init_canvas(self) -> MultiCanvas:
+        canvas = MultiCanvas(2, width=self.width, height=self.height)
+        canvas.on_mouse_down(self.mouse_down)
+
+        canvas[0].line_width = 2
+        canvas[0].stroke_style = "blue"
+        canvas[0].fill_style = "rgba(0, 0, 255, 0.2)"
+        canvas[0].translate(0, self.height)
+        canvas[0].scale(1, -1)
+
+        canvas[1].fill_style = "orange"
+        canvas[1].translate(0, self.height)
+        canvas[1].scale(1, -1)
+
+        with hold_canvas(canvas[1]):
+            for point in self.points:
+                canvas[1].fill_circle(point.x, point.y, 5)
+
+        self.out.clear_output(wait=True)
+        with self.out:
+            display(canvas)
+        self.canvas = canvas
+
+    def draw_path(self, points: list[Point], close=False, fill=False):
+        self.canvas[0].begin_path()
+        self.canvas[0].move_to(points[0].x, points[0].y)
+        for point in points[1:]:
+            self.canvas[0].line_to(point.x, point.y)
+        if close:
+            self.canvas[0].close_path()
+        self.canvas[0].stroke()
+        if fill:
+            self.canvas[0].fill()
+
+    def draw_polyline(self, polyline: Polyline, animate=False):
         with hold_canvas(self.canvas[0]):
-            self.canvas[0].fill_styled_polygons(polygon_points, color, alpha=0.2)
-            self.canvas[0].stroke_styled_polygons(polygon_points, color)
+            if animate:
+                current_points = []
+                self.animation_started = True
+                for event in polyline.events:
+                    event(current_points)
+                    self.canvas[0].clear()
+                    self.draw_path(current_points)
+                    self.canvas[0].sleep(1100 - 100 * self.slider.value)
+                self.canvas[0].clear()
+            self.draw_path(polyline.points, close=True, fill=True)
 
     def add_points(self, points: list[Point]):
-        self.points.extend(points)
+        if len(self.points) + len(points) > 1000:   # TODO: not accurate
+            return
         with hold_canvas(self.canvas[1]):
-            for p in points:
-                self.canvas[1].fill_circle(p.x, p.y, 5)
+            for point in points:
+                self.points.add(point)
+                self.canvas[1].fill_circle(point.x, point.y, 5)
+        self.number_label.value = f"Number of points: {len(self.points)} (of maximum 1000)"
 
-    def register_button(self, description: str, callback):
+    def register_button(self, description: str, callback: Callable):
         button = Button(
             description=description,
             disabled=False,
@@ -73,7 +123,7 @@ class Visualisation:
         button.on_click(lambda _: self._callback_with_lock(callback))
         self.buttons.append(button)
 
-    def _callback_with_lock(self, callback: Callable):
+    def _callback_with_lock(self, callback: Callable):      # TODO: This might not be optimal.
         if self.lock.acquire(blocking=False):
             for button in self.buttons:
                 button.disabled = True
@@ -87,9 +137,9 @@ class Visualisation:
 
     def _instance_callback(self, points: list[Point]):
         self.clear()
-        self.add_points(points)     # mode="points"
+        self.add_points(points)     # TODO: mode="points"
         
-    def register_algorithm(self, name: str, algo: Callable[[list[Point]], list[Point]]):
+    def register_algorithm(self, name: str, algo: Callable):
         self.register_button(name, lambda _: self._algorithm_callback(algo))
 
     def _algorithm_callback(self, algo):
@@ -97,21 +147,26 @@ class Visualisation:
         start = time.time()
         result = algo(self.points)
         end = time.time()
-        self.add_polygon(result)    # mode="polygon"
-        self.label.value = f"Runtime: {1000 * (end - start)} ms"
+        self.draw_polyline(result, animate=self.checkbox.value)     # TODO: mode="polyline"
+        self.runtime_label.value = f"Runtime: {1000 * (end - start)} ms"
     
     def clear(self):
-        self.clear_background()
         self.clear_points()
+        self.clear_background()
 
     def clear_background(self):
         self.canvas[0].clear()
+        if self.animation_started:
+            self.animation_started = False
+            self.init_canvas()
 
     def clear_points(self):
         self.points.clear()
         self.canvas[1].clear()
+        self.number_label.value = f"Number of points: {len(self.points)} (of maximum 1000)"
 
     def display(self):
-        display(self.canvas)
-        display(HBox(self.buttons))
-        display(self.label)
+        display(self.out)
+        display(HBox(self.buttons + [self.checkbox, self.slider]))
+        display(self.number_label)
+        display(self.runtime_label)

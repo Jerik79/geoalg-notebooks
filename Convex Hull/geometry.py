@@ -2,6 +2,8 @@ from enum import Enum, auto
 import math
 import numpy as np
 
+from typing import Callable, Iterable, Union
+
 class Orientation(Enum):
     LEFT = auto()
     RIGHT = auto()
@@ -77,3 +79,52 @@ class PointRef(Point):
     def is_in_container(self, container: list[Point]) -> bool:
         return container is self.container
     
+
+class Polyline:
+    def __init__(self, points: Iterable[Point] = []):
+        self.points: list[Point] = []
+        self.events: list[Callable] = []
+        self.extend(points)
+
+    def append(self, point: Point):
+        self.points.append(point)
+        self.events.append(lambda l: l.append(point))
+
+    def extend(self, points: Iterable[Point]):
+        for p in points:
+            self.append(p)
+
+    def pop(self) -> Point:
+        point = self.points.pop()
+        self.events.append(lambda l: l.pop())
+        return point
+
+    def __repr__(self) -> str:
+        return self.points.__repr__()
+
+    def __len__(self) -> int:
+        return len(self.points)
+
+    def __getitem__(self, key) -> Union[Point, 'Polyline']:
+        # This implementation is a hack, but it works for Graham Scan.
+        if isinstance(key, slice):
+            if key.step is not None and key.step != 1:
+                raise ValueError("Polyline doesn't accept slice keys with a step different from 1.")
+            result = Polyline()
+            result.points = self.points[key]
+            result.events = self.events[:]
+            return result
+        return self.points[key]
+
+    def __delitem__(self, key):
+        if not isinstance(key, int) or key >= 0:
+            # This constraint enables an easy implementation of __add__().
+            raise ValueError("Polyline only accepts a negative integer as a deletion key.")
+        del self.points[key]
+        self.events.append(lambda l: l.__delitem__(key))
+
+    def __add__(self, other: "Polyline"):
+        result = Polyline()
+        result.points = self.points + other.points
+        result.events = self.events + other.events
+        return result
