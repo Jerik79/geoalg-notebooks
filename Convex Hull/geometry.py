@@ -80,7 +80,7 @@ class PointRef(Point):
         return container is self.container
     
 
-class Polyline:
+class Polygon:
     def __init__(self, points: Iterable[Point] = []):
         self.points: list[Point] = []
         self.events: list[Callable] = []
@@ -105,12 +105,12 @@ class Polyline:
     def __len__(self) -> int:
         return len(self.points)
 
-    def __getitem__(self, key) -> Union[Point, 'Polyline']:
+    def __getitem__(self, key) -> Union[Point, 'Polygon']:
         # This implementation is a hack, but it works for Graham Scan.
         if isinstance(key, slice):
             if key.step is not None and key.step != 1:
                 raise ValueError("Polyline doesn't accept slice keys with a step different from 1.")
-            result = Polyline()
+            result = Polygon()
             result.points = self.points[key]
             result.events = self.events[:]
             return result
@@ -123,8 +123,8 @@ class Polyline:
         del self.points[key]
         self.events.append(lambda l: l.__delitem__(key))
 
-    def __add__(self, other: "Polyline"):
-        result = Polyline()
+    def __add__(self, other: 'Polygon'):
+        result = Polygon()
         result.points = self.points + other.points
         result.events = self.events + other.events
         return result

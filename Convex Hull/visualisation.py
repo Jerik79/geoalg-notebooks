@@ -2,7 +2,7 @@ from typing import Callable
 from ipycanvas import Canvas, MultiCanvas, hold_canvas
 from ipywidgets import Output, Button, Label, Checkbox, HBox, IntSlider
 from IPython.display import display
-from geometry import Point, Polyline
+from geometry import Point, Polygon
 import time
 from threading import Lock
 
@@ -91,18 +91,18 @@ class Visualisation:
         if fill:
             self.canvas[0].fill()
 
-    def draw_polyline(self, polyline: Polyline, animate=False):
+    def draw_polygon(self, polygon: Polygon, animate=False):
         with hold_canvas(self.canvas[0]):
             if animate:
                 current_points = []
                 self.animation_started = True
-                for event in polyline.events:
+                for event in polygon.events:
                     event(current_points)
                     self.canvas[0].clear()
                     self.draw_path(current_points)
                     self.canvas[0].sleep(1100 - 100 * self.slider.value)
                 self.canvas[0].clear()
-            self.draw_path(polyline.points, close=True, fill=True)
+            self.draw_path(polygon.points, close=True, fill=True)
 
     def add_points(self, points: list[Point]):
         if len(self.points) + len(points) > 1000:   # TODO: not accurate
@@ -147,7 +147,7 @@ class Visualisation:
         start = time.time()
         result = algo(self.points)
         end = time.time()
-        self.draw_polyline(result, animate=self.checkbox.value)     # TODO: mode="polyline"
+        self.draw_polygon(result, animate=self.checkbox.value)     # TODO: mode="polygon"
         self.runtime_label.value = f"Runtime: {1000 * (end - start)} ms"
     
     def clear(self):
