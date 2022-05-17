@@ -2,7 +2,7 @@ from typing import Callable
 from ipycanvas import Canvas, MultiCanvas, hold_canvas
 from ipywidgets import Output, Button, Label, Checkbox, HBox, IntSlider
 from IPython.display import display
-from geometry import Point, Polygon
+from geometry import Point, Polygon, AppendEvent
 import time
 from threading import Lock
 
@@ -94,12 +94,17 @@ class Visualisation:
     def draw_polygon(self, polygon: Polygon, animate=False):
         with hold_canvas(self.canvas[0]):
             if animate:
+                if polygon.points:
+                    polygon.append(polygon.points[0])
                 current_points = []
                 self.animation_started = True
                 for event in polygon.events:
+                    if isinstance(event, AppendEvent) and current_points and event.point == current_points[-1]:
+                        continue
                     event.execute_on(current_points)
                     self.canvas[0].clear()
                     self.draw_path(current_points)
+                    self.canvas[0].fill_circle(current_points[-1].x, current_points[-1].y, 10)
                     self.canvas[0].sleep(1100 - 100 * self.slider.value)
                 self.canvas[0].clear()
             self.draw_path(polygon.points, close=True, fill=True)

@@ -2,7 +2,7 @@ from enum import Enum, auto
 import math
 import numpy as np
 
-from typing import Callable, Iterable, Union
+from typing import Iterable, Union
 
 class Orientation(Enum):
     LEFT = auto()
@@ -121,7 +121,7 @@ class Polygon:
         if self.events and isinstance(self.events[-1], PopEvent):           # For GiftWrapping.
             self.events[-1] = SetEvent(-1, point)
         else:
-            self.events.append(AppendEvent(point))      # can improve Graham here
+            self.events.append(AppendEvent(point))
 
     def extend(self, points: Iterable[Point]):
         for p in points:
@@ -139,10 +139,10 @@ class Polygon:
         return len(self.points)
 
     def __getitem__(self, key) -> Union[Point, 'Polygon']:
-        # This implementation is a hack, but it works for Graham Scan. (Though not perfectly...)
+        # This implementation is a hack, but it works for Graham Scan.
         if isinstance(key, slice):
             if key.step is not None and key.step != 1:
-                raise ValueError("Polyline doesn't accept slice keys with a step different from 1.")
+                raise ValueError("Polygon doesn't accept slice keys with a step different from 1.")
             result = Polygon()
             result.points = self.points[key]
             result.events = self.events[:]
@@ -150,9 +150,9 @@ class Polygon:
         return self.points[key]
 
     def __delitem__(self, key):
-        if not isinstance(key, int) or key >= 0:        # Can be changed now.
+        if not isinstance(key, int) or key >= 0:        # Can (probably) be changed now.
             # This constraint enables an easy implementation of __add__().
-            raise ValueError("Polyline only accepts a negative integer as a deletion key.")
+            raise ValueError("Polygon only accepts a negative integer as a deletion key.")
         del self.points[key]
         self.events.append(DeleteEvent(key))
 
