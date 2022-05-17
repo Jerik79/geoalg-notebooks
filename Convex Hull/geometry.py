@@ -78,24 +78,50 @@ class PointRef(Point):
     
     def is_in_container(self, container: list[Point]) -> bool:
         return container is self.container
-    
+
+
+class AppendEvent:
+    def __init__(self, point):
+        self.point = point
+
+    def execute_on(self, points: list[Point]):
+        points.append(self.point)
+
+class PopEvent:
+    def execute_on(self, points: list[Point]):
+        points.pop()
+
+class SetEvent:
+    def __init__(self, key, point):
+        self.key = key
+        self.point = point
+
+    def execute_on(self, points: list[Point]):
+        points[self.key] = self.point
+
+class DeleteEvent:
+    def __init__(self, key):
+        self.key = key
+
+    def execute_on(self, points: list[Point]):
+        del points[self.key]
+
+Event = Union[AppendEvent, PopEvent, SetEvent, DeleteEvent]
+
 
 class Polygon:
     def __init__(self, points: Iterable[Point] = []):
         self.points: list[Point] = []
-        self.events: list[Callable] = []
-        self.last_was_pop = False       # For GiftWrapping.
-
+        self.events: list[Event] = []
         self.extend(points)
 
     def append(self, point: Point):
         self.points.append(point)
 
-        if self.last_was_pop:           # For GiftWrapping.
-            self.events[-1] = lambda l: l.__setitem__(-1, point)
-            self.last_was_pop = False
+        if self.events and isinstance(self.events[-1], PopEvent):           # For GiftWrapping.
+            self.events[-1] = SetEvent(-1, point)
         else:
-            self.events.append(lambda l: l.append(point))
+            self.events.append(AppendEvent(point))      # can improve Graham here
 
     def extend(self, points: Iterable[Point]):
         for p in points:
@@ -103,10 +129,7 @@ class Polygon:
 
     def pop(self) -> Point:
         point = self.points.pop()
-        self.events.append(lambda l: l.pop())
-
-        self.last_was_pop = True        # For GiftWrapping.
-
+        self.events.append(PopEvent())
         return point
 
     def __repr__(self) -> str:
@@ -127,11 +150,11 @@ class Polygon:
         return self.points[key]
 
     def __delitem__(self, key):
-        if not isinstance(key, int) or key >= 0:
+        if not isinstance(key, int) or key >= 0:        # Can be changed now.
             # This constraint enables an easy implementation of __add__().
             raise ValueError("Polyline only accepts a negative integer as a deletion key.")
         del self.points[key]
-        self.events.append(lambda l: l.__delitem__(key))
+        self.events.append(DeleteEvent(key))
 
     def __add__(self, other: 'Polygon'):
         result = Polygon()

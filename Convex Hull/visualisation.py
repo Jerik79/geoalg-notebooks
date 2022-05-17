@@ -97,7 +97,7 @@ class Visualisation:
                 current_points = []
                 self.animation_started = True
                 for event in polygon.events:
-                    event(current_points)
+                    event.execute_on(current_points)
                     self.canvas[0].clear()
                     self.draw_path(current_points)
                     self.canvas[0].sleep(1100 - 100 * self.slider.value)
