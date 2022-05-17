@@ -84,11 +84,18 @@ class Polygon:
     def __init__(self, points: Iterable[Point] = []):
         self.points: list[Point] = []
         self.events: list[Callable] = []
+        self.last_was_pop = False       # For GiftWrapping.
+
         self.extend(points)
 
     def append(self, point: Point):
         self.points.append(point)
-        self.events.append(lambda l: l.append(point))
+
+        if self.last_was_pop:           # For GiftWrapping.
+            self.events[-1] = lambda l: l.__setitem__(-1, point)
+            self.last_was_pop = False
+        else:
+            self.events.append(lambda l: l.append(point))
 
     def extend(self, points: Iterable[Point]):
         for p in points:
@@ -97,6 +104,9 @@ class Polygon:
     def pop(self) -> Point:
         point = self.points.pop()
         self.events.append(lambda l: l.pop())
+
+        self.last_was_pop = True        # For GiftWrapping.
+
         return point
 
     def __repr__(self) -> str:
@@ -106,7 +116,7 @@ class Polygon:
         return len(self.points)
 
     def __getitem__(self, key) -> Union[Point, 'Polygon']:
-        # This implementation is a hack, but it works for Graham Scan.
+        # This implementation is a hack, but it works for Graham Scan. (Though not perfectly...)
         if isinstance(key, slice):
             if key.step is not None and key.step != 1:
                 raise ValueError("Polyline doesn't accept slice keys with a step different from 1.")
