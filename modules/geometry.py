@@ -5,12 +5,14 @@ import numpy as np
 from typing import Iterable, Union
 from abc import ABC, abstractmethod
 
+
 class Orientation(Enum):
     LEFT = auto()
     RIGHT = auto()
     BEHIND_SOURCE = auto()
     BETWEEN = auto()
     BEHIND_TARGET = auto()
+
 
 class Point:
     def __init__(self,x,y):
@@ -57,7 +59,7 @@ class Point:
                 return Orientation.BEHIND_TARGET
             else:
                 return Orientation.BETWEEN
-            
+
 class PointRef(Point):
     def __init__(self, container: list[Point], pos: int):
         self.container = container
@@ -79,44 +81,6 @@ class PointRef(Point):
     
     def is_in_container(self, container: list[Point]) -> bool:
         return container is self.container
-
-
-class Event(ABC):
-    @abstractmethod
-    def execute_on(self, points: list[Point], background_points: list[Point]):
-        pass
-
-class AppendEvent(Event):
-    def __init__(self, point: Point, draw_container: bool):
-        self.point = point
-        self.draw_container = draw_container
-
-    def execute_on(self, points: list[Point], background_points: list[Point]):
-        points.append(self.point)
-        if self.draw_container and isinstance(self.point, PointRef):
-            background_points.extend(self.point.container)
-
-class PopEvent(Event):
-    def execute_on(self, points: list[Point], background_points: list[Point]):
-        points.pop()
-
-class SetEvent(Event):
-    def __init__(self, key, point, draw_container: bool):
-        self.key = key
-        self.point = point
-        self.draw_container = draw_container
-
-    def execute_on(self, points: list[Point], background_points: list[Point]):
-        points[self.key] = self.point
-        if self.draw_container and isinstance(self.point, PointRef):
-            background_points.extend(self.point.container)
-
-class DeleteEvent(Event):
-    def __init__(self, key):
-        self.key = key
-
-    def execute_on(self, points: list[Point], background_points: list[Point]):
-        del points[self.key]
 
 
 class Polygon:
@@ -175,3 +139,41 @@ class Polygon:
         result.points = self.points + other.points
         result.events = self.events + other.events
         return result
+
+
+class Event(ABC):
+    @abstractmethod
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        pass
+
+class AppendEvent(Event):
+    def __init__(self, point: Point, draw_container: bool):
+        self.point = point
+        self.draw_container = draw_container
+
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        points.append(self.point)
+        if self.draw_container and isinstance(self.point, PointRef):
+            background_points.extend(self.point.container)
+
+class PopEvent(Event):
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        points.pop()
+
+class SetEvent(Event):
+    def __init__(self, key, point, draw_container: bool):
+        self.key = key
+        self.point = point
+        self.draw_container = draw_container
+
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        points[self.key] = self.point
+        if self.draw_container and isinstance(self.point, PointRef):
+            background_points.extend(self.point.container)
+
+class DeleteEvent(Event):
+    def __init__(self, key):
+        self.key = key
+
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        del points[self.key]
