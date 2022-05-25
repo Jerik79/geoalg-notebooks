@@ -5,6 +5,7 @@ from IPython.display import display
 from geometry import Point, Polygon, AppendEvent
 import time
 from threading import Lock
+import numpy as np
 
 class Visualisation:
     def __init__(self):
@@ -27,14 +28,29 @@ class Visualisation:
         self.canvas = None
         self.init_canvas()
 
-        self.buttons = [Button(
-            description="Clear",
-            disabled=False,
-            button_style="",
-            tooltip="Click me"
-        )]
-        clear_callback = lambda _: self.clear()     # TODO: register button that creates random points
-        self.buttons[0].on_click(lambda _: self._callback_with_lock(clear_callback))       
+        self.buttons = [
+            Button(
+                description="Clear",
+                disabled=False,
+                button_style="",
+                tooltip="Click me"
+            ),
+            Button(
+                description="Random instance",
+                disabled=False,
+                button_style="",
+                tooltip="Click me"
+            )    
+        ]
+        clear_callback = lambda _: self.clear()
+        self.buttons[0].on_click(lambda _: self._callback_with_lock(clear_callback))
+        def random_callback(x):
+            self.clear()
+            self.add_points([Point(             # TODO: improve this
+                np.random.randint(low=20, high=self.width - 20),
+                np.random.randint(low=20, high=self.height - 20),
+            ) for _ in range(100)])
+        self.buttons[1].on_click(lambda _: self._callback_with_lock(random_callback))
 
         self.number_label = Label("Number of points: 0 (of maximum 1000)")
         self.runtime_label = Label(value="Runtime: ")
@@ -191,6 +207,8 @@ class Visualisation:
 
     def display(self):
         display(self.out)
-        display(HBox(self.buttons + [self.checkbox, self.slider]))
+        display(HBox(self.buttons[:3]))     # TODO: Separate instances from algorithms.
+        display(HBox(self.buttons[3:]))
+        display(HBox([self.checkbox, self.slider]))
         display(self.number_label)
         display(self.runtime_label)
