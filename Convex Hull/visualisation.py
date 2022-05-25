@@ -58,7 +58,7 @@ class Visualisation:
         )
 
     def init_canvas(self) -> MultiCanvas:
-        canvas = MultiCanvas(2, width=self.width, height=self.height)
+        canvas = MultiCanvas(3, width=self.width, height=self.height)
         canvas.on_mouse_down(self.mouse_down)
 
         canvas[0].line_width = 2
@@ -71,6 +71,10 @@ class Visualisation:
         canvas[1].translate(0, self.height)
         canvas[1].scale(1, -1)
 
+        canvas[2].stroke_style = "black"            # TODO: more layers? own mode for each layer?
+        canvas[2].translate(0, self.height)
+        canvas[2].scale(1, -1)
+
         with hold_canvas(canvas[1]):
             for point in self.points:
                 canvas[1].fill_circle(point.x, point.y, 5)
@@ -80,34 +84,49 @@ class Visualisation:
             display(canvas)
         self.canvas = canvas
 
-    def draw_path(self, points: list[Point], close=False, fill=False):
-        self.canvas[0].begin_path()
-        self.canvas[0].move_to(points[0].x, points[0].y)
-        for point in points[1:]:
-            self.canvas[0].line_to(point.x, point.y)
-        if close:
-            self.canvas[0].close_path()
-        self.canvas[0].stroke()
-        if fill:
-            self.canvas[0].fill()
+    def draw_path(self, cv: int, points: list[Point], close=False, fill=False):
+        if points:
+            self.canvas[cv].begin_path()
+            self.canvas[cv].move_to(points[0].x, points[0].y)
+            for point in points[1:]:
+                self.canvas[cv].line_to(point.x, point.y)
+            if close:
+                self.canvas[cv].close_path()
+            self.canvas[cv].stroke()
+            if fill:
+                self.canvas[cv].fill()
 
     def draw_polygon(self, polygon: Polygon, animate=False):
-        with hold_canvas(self.canvas[0]):
+        with hold_canvas(self.canvas[0]), hold_canvas(self.canvas[2]):
             if animate:
                 if polygon.points:
                     polygon.append(polygon.points[0])
                 current_points = []
+                background_points = []
                 self.animation_started = True
+                step_time = 1100 - 100 * self.slider.value
                 for event in polygon.events:
                     if isinstance(event, AppendEvent) and current_points and event.point == current_points[-1]:
                         continue
-                    event.execute_on(current_points)
+
+                    background_points.clear()
+                    event.execute_on(current_points, background_points)
+
+                    if background_points:
+                        self.canvas[2].clear()
+                        self.draw_path(2, background_points, close=True)
+                        self.canvas[2].sleep(2 * step_time)
+                        self.canvas[0].sleep(step_time)
+                    else:
+                        self.canvas[2].sleep(step_time)
+
                     self.canvas[0].clear()
-                    self.draw_path(current_points)
+                    self.draw_path(0, current_points)
                     self.canvas[0].fill_circle(current_points[-1].x, current_points[-1].y, 10)
-                    self.canvas[0].sleep(1100 - 100 * self.slider.value)
+                    self.canvas[0].sleep(step_time)
                 self.canvas[0].clear()
-            self.draw_path(polygon.points, close=True, fill=True)
+                self.canvas[2].clear()
+            self.draw_path(0, polygon.points, close=True, fill=True)
 
     def add_points(self, points: list[Point]):
         if len(self.points) + len(points) > 1000:   # TODO: not accurate

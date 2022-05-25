@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from typing import Iterable, Union
+from abc import ABC, abstractmethod
 
 class Orientation(Enum):
     LEFT = auto()
@@ -80,52 +81,65 @@ class PointRef(Point):
         return container is self.container
 
 
-class AppendEvent:
-    def __init__(self, point):
+class Event(ABC):
+    @abstractmethod
+    def execute_on(self, points: list[Point], background_points: list[Point]):
+        pass
+
+class AppendEvent(Event):
+    def __init__(self, point: Point, draw_container: bool):
         self.point = point
+        self.draw_container = draw_container
 
-    def execute_on(self, points: list[Point]):
+    def execute_on(self, points: list[Point], background_points: list[Point]):
         points.append(self.point)
+        if self.draw_container and isinstance(self.point, PointRef):
+            background_points.extend(self.point.container)
 
-class PopEvent:
-    def execute_on(self, points: list[Point]):
+class PopEvent(Event):
+    def execute_on(self, points: list[Point], background_points: list[Point]):
         points.pop()
 
-class SetEvent:
-    def __init__(self, key, point):
+class SetEvent(Event):
+    def __init__(self, key, point, draw_container: bool):
         self.key = key
         self.point = point
+        self.draw_container = draw_container
 
-    def execute_on(self, points: list[Point]):
+    def execute_on(self, points: list[Point], background_points: list[Point]):
         points[self.key] = self.point
+        if self.draw_container and isinstance(self.point, PointRef):
+            background_points.extend(self.point.container)
 
-class DeleteEvent:
+class DeleteEvent(Event):
     def __init__(self, key):
         self.key = key
 
-    def execute_on(self, points: list[Point]):
+    def execute_on(self, points: list[Point], background_points: list[Point]):
         del points[self.key]
-
-Event = Union[AppendEvent, PopEvent, SetEvent, DeleteEvent]
 
 
 class Polygon:
     def __init__(self, points: Iterable[Point] = []):
         self.points: list[Point] = []
         self.events: list[Event] = []
-        self.extend(points)
+        self.previously_drawn_container = None
+        for p in points:
+            self.append(p, draw_container=False)
 
-    def append(self, point: Point):
+    def append(self, point: Point, draw_container: bool = True):
         self.points.append(point)
 
-        if self.events and isinstance(self.events[-1], PopEvent):           # For GiftWrapping.
-            self.events[-1] = SetEvent(-1, point)
-        else:
-            self.events.append(AppendEvent(point))
+        if draw_container and isinstance(point, PointRef):
+            if point.container is self.previously_drawn_container:
+                draw_container = False
+            else:
+                self.previously_drawn_container = point.container
 
-    def extend(self, points: Iterable[Point]):
-        for p in points:
-            self.append(p)
+        if self.events and isinstance(self.events[-1], PopEvent):           # For GiftWrapping.
+            self.events[-1] = SetEvent(-1, point, draw_container)
+        else:
+            self.events.append(AppendEvent(point, draw_container))
 
     def pop(self) -> Point:
         point = self.points.pop()
@@ -150,8 +164,8 @@ class Polygon:
         return self.points[key]
 
     def __delitem__(self, key):
-        if not isinstance(key, int) or key >= 0:        # Can (probably) be changed now.
-            # This constraint enables an easy implementation of __add__().
+        if not isinstance(key, int) or key >= 0:
+            # This constraint enables an easy implementation of __add__(). TODO: Can probably be changed now.
             raise ValueError("Polygon only accepts a negative integer as a deletion key.")
         del self.points[key]
         self.events.append(DeleteEvent(key))
