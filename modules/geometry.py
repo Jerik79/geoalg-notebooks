@@ -60,7 +60,7 @@ class Point:
             else:
                 return Orientation.BETWEEN
 
-class PointRef(Point):
+class PointReference(Point):
     def __init__(self, container: list[Point], pos: int):
         self.container = container
         self.pos = pos
@@ -94,7 +94,7 @@ class Polygon:
     def append(self, point: Point, draw_container: bool = True):
         self.points.append(point)
 
-        if draw_container and isinstance(point, PointRef):
+        if draw_container and isinstance(point, PointReference):
             if point.container is self.previously_drawn_container:
                 draw_container = False
             else:
@@ -153,7 +153,7 @@ class AppendEvent(Event):
 
     def execute_on(self, points: list[Point], background_points: list[Point]):
         points.append(self.point)
-        if self.draw_container and isinstance(self.point, PointRef):
+        if self.draw_container and isinstance(self.point, PointReference):
             background_points.extend(self.point.container)
 
 class PopEvent(Event):
@@ -168,7 +168,7 @@ class SetEvent(Event):
 
     def execute_on(self, points: list[Point], background_points: list[Point]):
         points[self.key] = self.point
-        if self.draw_container and isinstance(self.point, PointRef):
+        if self.draw_container and isinstance(self.point, PointReference):
             background_points.extend(self.point.container)
 
 class DeleteEvent(Event):
