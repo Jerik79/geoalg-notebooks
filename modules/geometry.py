@@ -18,15 +18,15 @@ class Point:
     def __init__(self,x,y):
         #self.x = x
         #self.y = y
-        self.coords = np.array([x, y])
+        self._coords = np.array([x, y])
 
     @property
     def x(self):
-        return self.coords[0]
+        return self._coords[0]
     
     @property
     def y(self):
-        return self.coords[1]
+        return self._coords[1]
         
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
@@ -61,12 +61,12 @@ class Point:
                 return Orientation.BETWEEN
 
 class PointReference(Point):
-    def __init__(self, container: list[Point], pos: int):
-        self.container = container
-        self.pos = pos
+    def __init__(self, container: list[Point], position: int):
+        self._container = container
+        self._position = position
         
     def get_point(self) -> Point:
-        return self.container[self.pos]
+        return self._container[self._position]
     
     @property
     def x(self):
@@ -77,28 +77,28 @@ class PointReference(Point):
         return self.get_point().y
 
     def get_position(self):
-        return self.pos
+        return self._position
     
     def is_in_container(self, container: list[Point]) -> bool:
-        return container is self.container
+        return container is self._container
 
 
 class Polygon:
     def __init__(self, points: Iterable[Point] = []):
         self.points: list[Point] = []
         self.events: list[Event] = []
-        self.previously_drawn_container = None
-        for p in points:
-            self.append(p, draw_container=False)
+        self._previously_drawn_container = None
+        for point in points:
+            self.append(point, draw_container = False)
 
     def append(self, point: Point, draw_container: bool = True):
         self.points.append(point)
 
         if draw_container and isinstance(point, PointReference):
-            if point.container is self.previously_drawn_container:
+            if point._container is self._previously_drawn_container:
                 draw_container = False
             else:
-                self.previously_drawn_container = point.container
+                self._previously_drawn_container = point._container
 
         if self.events and isinstance(self.events[-1], PopEvent):           # For GiftWrapping.
             self.events[-1] = SetEvent(-1, point, draw_container)
@@ -109,6 +109,10 @@ class Polygon:
         point = self.points.pop()
         self.events.append(PopEvent())
         return point
+
+    def animate(self, point: Point):
+        self.append(point)
+        self.pop()
 
     def __repr__(self) -> str:
         return self.points.__repr__()
@@ -154,7 +158,7 @@ class AppendEvent(Event):
     def execute_on(self, points: list[Point], background_points: list[Point]):
         points.append(self.point)
         if self.draw_container and isinstance(self.point, PointReference):
-            background_points.extend(self.point.container)
+            background_points.extend(self.point._container)
 
 class PopEvent(Event):
     def execute_on(self, points: list[Point], background_points: list[Point]):
@@ -169,7 +173,7 @@ class SetEvent(Event):
     def execute_on(self, points: list[Point], background_points: list[Point]):
         points[self.key] = self.point
         if self.draw_container and isinstance(self.point, PointReference):
-            background_points.extend(self.point.container)
+            background_points.extend(self.point._container)
 
 class DeleteEvent(Event):
     def __init__(self, key):
