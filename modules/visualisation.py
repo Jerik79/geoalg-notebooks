@@ -30,7 +30,7 @@ class Visualisation:
 
     ## Initialisation methods.
 
-    def __init__(self, width: int = 450, height: int = 450):
+    def __init__(self, width: int = 400, height: int = 400):
         self._width = width
         self._height = height
 
