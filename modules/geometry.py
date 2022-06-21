@@ -145,6 +145,7 @@ class Polygon:
         return result
 
 
+# TODO: Generalise 'background_points'.
 class Event(ABC):
     @abstractmethod
     def execute_on(self, points: list[Point], background_points: list[Point]):

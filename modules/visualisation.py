@@ -7,19 +7,30 @@ from geometry import Point, Polygon, AppendEvent
 import time
 import numpy as np
 
-# Canvas numbers for background, points and highlighting.
-BG = 0
-PTS = 1
-HL = 2
 
-class DrawingMode(Enum):        # TODO: Isn't used yet...
+# TODO: Not used yet. Give each layer drawing mode. The modes should be selected at the time of object initialisation.
+class DrawingMode(Enum):
     Points = auto()
     Path = auto()
     Polygon = auto()
 
 
+class Layer(Enum):
+    _BACK = 0       # Background used for algorithm outputs.
+    _MAIN = 1       # Main layer used for points / instances.
+    _FORE = 2       # Foreground used for additional highlights during animations.
+
+
 class Visualisation:
-    def __init__(self, width: int = 500, height: int = 500):
+    ## Constants.
+
+    _DEFAULT_POINT_RADIUS = 5
+    _DEFAULT_VBOX_ITEM_MARGIN = "0px 0px 20px 0px"
+
+
+    ## Initialisation methods.
+
+    def __init__(self, width: int = 450, height: int = 450):
         self._width = width
         self._height = height
 
@@ -29,36 +40,42 @@ class Visualisation:
 
         self._previous_callback_finish_time = time.time()
         def handle_click_on_canvas(x, y):
-            if time.time() - self._previous_callback_finish_time < 0.35:
+            if time.time() - self._previous_callback_finish_time < 0.35:       # TODO: This doesn't work well...
                 return
-            if self.add_points([Point(x, self._height - y)]):
-                self.clear_background()
+            if self.add_point(Point(x, self._height - y)):
+                self.clear_background_layer()
+                self.clear_foreground_layer()
                 self._clear_runtime_labels()
         self._handle_click_on_canvas = handle_click_on_canvas
 
         self._init_canvas()
         self._init_ui()
 
+    @property
+    def width(self):
+        return self._width
 
-    # Initialisation methods.
+    @property
+    def height(self):
+        return self._height
 
     def _init_canvas(self) -> MultiCanvas:
         canvas = MultiCanvas(3, width = self._width, height = self._height)
         canvas.on_mouse_down(self._handle_click_on_canvas)
 
-        canvas[BG].line_width = 2
-        canvas[BG].stroke_style = "blue"
-        canvas[BG].fill_style = "rgba(0, 0, 255, 0.2)"
+        canvas[Layer._BACK.value].line_width = 2
+        canvas[Layer._BACK.value].stroke_style = "blue"
+        canvas[Layer._BACK.value].fill_style = "rgba(0, 0, 255, 0.2)"
 
-        canvas[PTS].stroke_style = "orange"
-        canvas[PTS].fill_style = "orange"
+        canvas[Layer._MAIN.value].stroke_style = "orange"
+        canvas[Layer._MAIN.value].fill_style = "orange"
 
-        canvas[HL].stroke_style = "black"            # TODO: own mode for each layer?
-        canvas[HL].fill_style = "rgba(0, 0, 0, 0.2)"
+        canvas[Layer._FORE.value].stroke_style = "black"
+        canvas[Layer._FORE.value].fill_style = "rgba(0, 0, 0, 0.2)"
 
-        for cv in range(0, 3):
-            canvas[cv].translate(0, self._height)
-            canvas[cv].scale(1, -1)
+        for value in map(lambda layer: layer.value, Layer):
+            canvas[value].translate(0, self._height)
+            canvas[value].scale(1, -1)
 
         self._canvas = canvas
         self.draw_points(self._points)
@@ -68,10 +85,9 @@ class Visualisation:
             display(self._canvas)
 
     def _init_ui(self):
-        self._number_label = Label()
-        self._update_number_label()
+        self._point_number_label = Label()
+        self._update_point_number_label()
 
-        self._default_vbox_item_margin = "0px 0px 20px 0px"
         self._clear_canvas_button = self._create_button("Clear canvas", self.clear)
 
         self._random_button_int_text = BoundedIntText(
@@ -84,7 +100,7 @@ class Visualisation:
             return np.clip(np.random.normal(0.5 * maximum, 0.15 * maximum), 0, maximum)
         def random_button_callback():
             self.clear()
-            self.add_points([       # TODO: mode
+            self.add_points([
                 Point(get_random_value(self._width), get_random_value(self._height))
                 for _ in range(self._random_button_int_text.value)
             ])
@@ -105,7 +121,7 @@ class Visualisation:
             value = False,
             description = "Animate",
             indent = False,
-            layout = Layout(margin = self._default_vbox_item_margin)
+            layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)
         )
         self._animation_speed_slider = IntSlider(
             value = 5,
@@ -134,7 +150,7 @@ class Visualisation:
         )
 
 
-    # Widget display and manipulation methods.
+    ## Widget display and manipulation methods.
 
     def display(self):
         def vbox_with_header(title: str, children: Iterable[Widget], right_aligned: bool = False) -> VBox:
@@ -148,7 +164,7 @@ class Visualisation:
         upper_ui_widget_row = HBox([
             vbox_with_header("Canvas", (self._clear_canvas_button, random_button_hbox)),
             vbox_with_header("Animation", (self._animation_checkbox, self._animation_speed_slider)),
-        ], layout = Layout(margin = self._default_vbox_item_margin))
+        ], layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN))
 
         lower_ui_widget_row = HBox([
             vbox_with_header("Instances", self._instance_buttons),
@@ -158,22 +174,85 @@ class Visualisation:
 
         display(
             HBox([
-                VBox([self._canvas_output, self._number_label]),
+                VBox([self._canvas_output, self._point_number_label]),
                 VBox([upper_ui_widget_row, lower_ui_widget_row])
             ], layout = Layout(justify_content = "space-around"))
         )
 
-    def _disable_widgets(self):
-        for widget in self._activatable_widgets:
-            widget.disabled = True
+    # TODO: Respect drawing modes.
+    def add_point(self, point: Point, radius: int = _DEFAULT_POINT_RADIUS) -> bool:
+        if len(self._points) >= 999 or point in self._points:
+            return False
+        self._points.add(point)
+        self.draw_point(point, radius = radius, layer = Layer._MAIN)
+        self._update_point_number_label()
+        return True
 
-    def _enable_widgets(self):
-        for widget in self._activatable_widgets:
-            widget.disabled = False
+    # TODO: Respect drawing modes.
+    def add_points(self, points: Iterable[Point], radius: int = _DEFAULT_POINT_RADIUS):
+        with hold_canvas(self._canvas[Layer._MAIN.value]):
+            for point in points:
+                if len(self._points) >= 999:
+                    break
+                if point in self._points:
+                    continue
+                self._points.add(point)
+                self.draw_point(point, radius = radius, layer = Layer._MAIN)
+        self._update_point_number_label()
+
+    def _update_point_number_label(self):
+        self._point_number_label.value = f"Number of points: {len(self._points):0>3}"
+
+    def clear(self):
+        self.clear_background_layer()
+        self.clear_main_layer()
+        self.clear_foreground_layer()
+        self._clear_runtime_labels()
+
+    def clear_background_layer(self):
+        self._canvas[Layer._BACK.value].clear()
+        if self._animation_was_started:
+            self._animation_was_started = False
+            self._init_canvas()
+
+    def clear_main_layer(self):
+        self._points.clear()
+        self._canvas[Layer._MAIN.value].clear()
+        self._update_point_number_label()
+
+    def clear_foreground_layer(self):
+        self._canvas[Layer._FORE.value].clear()
+        if self._animation_was_started:
+            self._animation_was_started = False
+            self._init_canvas()
+
+    def _clear_runtime_labels(self):
+        for label in self._runtime_labels:
+            label.value = ""
+
+    def register_instance(self, name: str, points: Iterable[Point]):
+        def instance_callback():
+            self.clear()
+            self.add_points(points)
+        self._instance_buttons.append(self._create_button(name, instance_callback))
+
+    # TODO: Respect drawing modes.
+    def register_algorithm(self, name: str, algorithm: Callable):
+        label_index = len(self._runtime_labels)
+        self._runtime_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
+        def algorithm_callback():
+            self.clear_background_layer()
+            self.clear_foreground_layer()
+            start_time = time.time()
+            result = algorithm(self._points)
+            end_time = time.time()
+            self.draw_polygon(result, animate = self._animation_checkbox.value)
+            self._runtime_labels[label_index].value = f"{1000 * (end_time - start_time):.3f} ms"
+        self._algorithm_buttons.append(self._create_button(name, algorithm_callback))
 
     def _create_button(self, description: str, callback: Callable, layout: Optional[Layout] = None) -> Button:
         if layout is None:
-            layout = Layout(margin = self._default_vbox_item_margin)
+            layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)
         button = Button(description = description, layout = layout)
         def button_callback(_: Button):
             self._disable_widgets()
@@ -183,95 +262,40 @@ class Visualisation:
         button.on_click(button_callback)
         return button
 
-    def _update_number_label(self):
-        self._number_label.value = f"Number of points: {len(self._points):0>3}"
+    def _disable_widgets(self):
+        for widget in self._activatable_widgets:
+            widget.disabled = True
 
-    def _clear_runtime_labels(self):
-        for label in self._runtime_labels:
-            label.value = ""
-
-
-    # Public registering methods.
-
-    def register_instance(self, name: str, points: list[Point]):
-        def instance_callback():
-            self.clear()
-            self.add_points(points)     # TODO: mode="points"
-        self._instance_buttons.append(self._create_button(name, instance_callback))
-        
-    def register_algorithm(self, name: str, algorithm: Callable):
-        label_index = len(self._runtime_labels)
-        def algorithm_callback():
-            self.clear_background()
-            start = time.time()
-            result = algorithm(self._points)
-            end = time.time()
-            self.draw_polygon(result, animate = self._animation_checkbox.value)     # TODO: mode="polygon"
-            self._runtime_labels[label_index].value = f"{1000 * (end - start):.3f} ms"
-
-        self._runtime_labels.append(Label(layout = Layout(margin = self._default_vbox_item_margin)))
-        self._algorithm_buttons.append(self._create_button(name, algorithm_callback))
+    def _enable_widgets(self):
+        for widget in self._activatable_widgets:
+            widget.disabled = False
 
 
-    # Point and clear stuff
+    ## Canvas drawing methods.
 
-    def add_points(self, points: list[Point]) -> bool:      # TODO: modes !!!
-        union = self._points.union(set(points))
-        if len(union) > 999:
-            return False
-        self._points = union
-        self.draw_points(points)
-        self._update_number_label()
-        return True
+    # TODO: Respect drawing modes.
+    def draw_point(self, point: Point, radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._MAIN):
+        self._canvas[layer.value].fill_circle(point.x, point.y, radius)
 
-    def clear(self):
-        self.clear_points()
-        self.clear_background()
-        self._clear_runtime_labels()
-
-    def clear_background(self):
-        self._canvas[BG].clear()
-        if self._animation_was_started:
-            self._animation_was_started = False
-            self._init_canvas()
-
-    def clear_points(self):
-        self._points.clear()
-        self._canvas[PTS].clear()
-        self._update_number_label()
-
-
-    # Draw stuff
-
-    def draw_point(self, point: Point):         # TODO: make some of this private?
-        self._canvas[PTS].fill_circle(point.x, point.y, 5)
-
-    def draw_points(self, points: Iterable[Point]):
-        with hold_canvas(self._canvas[PTS]):
+    # TODO: Respect drawing modes.
+    def draw_points(self, points: Iterable[Point], radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._MAIN):
+        with hold_canvas(self._canvas[layer.value]):
             for point in points:
-                self.draw_point(point)
+                self.draw_point(point, radius = radius, layer = layer)
 
-    def draw_path(self, cv: int, points: list[Point], close=False, fill=False):
-        if points:
-            self._canvas[cv].begin_path()
-            self._canvas[cv].move_to(points[0].x, points[0].y)
-            for point in points[1:]:
-                self._canvas[cv].line_to(point.x, point.y)
-            if close:
-                self._canvas[cv].close_path()
-            self._canvas[cv].stroke()
-            if fill:
-                self._canvas[cv].fill()
-
-    def draw_polygon(self, polygon: Polygon, animate=False):
-        with hold_canvas(self._canvas[BG]), hold_canvas(self._canvas[HL]):
+    # TODO: Respect drawing modes. Generalise 'background_points' and foreground drawings. Maybe make layer(s) selectable.
+    def draw_polygon(self, polygon: Polygon, animate = False):
+        with hold_canvas(self._canvas[Layer._BACK.value]), hold_canvas(self._canvas[Layer._FORE.value]):
             if animate:
                 if polygon.points:
                     polygon.append(polygon.points[0])
+
                 current_points = []
                 background_points = []
+
                 self._animation_was_started = True
                 step_time = 1100 - 100 * self._animation_speed_slider.value
+
                 for event in polygon.events:
                     if isinstance(event, AppendEvent) and current_points and event.point == current_points[-1]:
                         continue
@@ -280,18 +304,47 @@ class Visualisation:
                     event.execute_on(current_points, background_points)
 
                     if background_points:
-                        self._canvas[HL].clear()
-                        self.draw_path(HL, background_points, close=True)
-                        self._canvas[HL].sleep(2 * step_time)
-                        self._canvas[BG].sleep(step_time)
+                        self._canvas[Layer._FORE.value].clear()
+                        self._draw_static_path(background_points, Layer._FORE, close = True)
+                        self._canvas[Layer._FORE.value].sleep(2 * step_time)
+                        self._canvas[Layer._BACK.value].sleep(step_time)
                     else:
-                        self._canvas[HL].sleep(step_time)
+                        self._canvas[Layer._FORE.value].sleep(step_time)
 
-                    self._canvas[BG].clear()
-                    self.draw_path(BG, current_points)
-                    self._canvas[BG].fill_circle(current_points[-1].x, current_points[-1].y, 10)
-                    self._canvas[BG].sleep(step_time)
-                self._canvas[BG].clear()
-                self._canvas[HL].clear()
-            self.draw_path(BG, polygon.points, close=True, fill=True)
+                    self._canvas[Layer._BACK.value].clear()
+                    self._draw_static_path(current_points, Layer._BACK)
+                    for point in current_points[:-1]:
+                        #self.draw_point(point, radius = 6, layer = Layer._BACK)
+                        self._canvas[Layer._BACK.value].stroke_circle(point.x, point.y, 6)
+                    self.draw_point(current_points[-1], radius = 12, layer = Layer._BACK)
+                    self._canvas[Layer._BACK.value].sleep(step_time)
+
+                self._canvas[Layer._BACK.value].clear()
+                self._canvas[Layer._FORE.value].clear()
+
+            self._draw_static_path(polygon.points, Layer._BACK, close = True, fill = True)
+            for point in polygon.points:
+                #self.draw_point(point, radius = 6, layer = Layer._BACK)
+                self._canvas[Layer._BACK.value].stroke_circle(point.x, point.y, 6)
+
+
+    def _draw_static_path(self, points: Iterable[Point], layer: Layer, close = False, fill = False):
+        points_iterator = iter(points)
+        first_point = next(points_iterator)
+        self._canvas[layer.value].begin_path()
+        self._canvas[layer.value].move_to(first_point.x, first_point.y)
+        for point in points_iterator:
+            self._canvas[layer.value].line_to(point.x, point.y)
+        if close:
+            self._canvas[layer.value].close_path()
+        self._canvas[layer.value].stroke()
+        if fill:
+            self._canvas[layer.value].fill()
+
+    # TODO:  Add Path type that can be animated like Polygon.
+    """ def draw_path(self, points: Path, layer: Layer, animate = False):
+        if not animate:
+            self._draw_static_path(points, layer)
+        else:
+            pass """
     
