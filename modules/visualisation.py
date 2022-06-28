@@ -16,9 +16,12 @@ class DrawingMode(Enum):
 
 
 class Layer(Enum):
-    _BACK = 0       # Background used for algorithm outputs.
-    _MAIN = 1       # Main layer used for points / instances.
-    _FORE = 2       # Foreground used for additional highlights during animations.
+    _ALGO_BACK = 0       # Background used for algorithm outputs.
+    _PTS_MAIN = 1       # Main layer used for points / instances.
+    _ALGO_MAIN = 2       # Foreground used for additional highlights during animations.
+    _PTS_FORE = 3
+    _ALGO_FORE = 4
+    _FRONT = 5
 
 
 class Visualisation:
@@ -30,7 +33,7 @@ class Visualisation:
 
     ## Initialisation methods.
 
-    def __init__(self, width: int = 400, height: int = 400):
+    def __init__(self, width, height):
         self._width = width
         self._height = height
 
@@ -40,11 +43,10 @@ class Visualisation:
 
         self._previous_callback_finish_time = time.time()
         def handle_click_on_canvas(x, y):
-            if time.time() - self._previous_callback_finish_time < 0.35:       # TODO: This doesn't work well...
+            if time.time() - self._previous_callback_finish_time < 1:       # TODO: This doesn't work well...
                 return
             if self.add_point(Point(x, self._height - y)):
-                self.clear_background_layer()
-                self.clear_foreground_layer()
+                self.clear_algorithm_layers()
                 self._clear_runtime_labels()
         self._handle_click_on_canvas = handle_click_on_canvas
 
@@ -60,18 +62,20 @@ class Visualisation:
         return self._height
 
     def _init_canvas(self) -> MultiCanvas:
-        canvas = MultiCanvas(3, width = self._width, height = self._height)
+        canvas = MultiCanvas(6, width = self._width, height = self._height)
         canvas.on_mouse_down(self._handle_click_on_canvas)
 
-        canvas[Layer._BACK.value].line_width = 2
-        canvas[Layer._BACK.value].stroke_style = "blue"
-        canvas[Layer._BACK.value].fill_style = "rgba(0, 0, 255, 0.2)"
+        for pts_layer in (Layer._PTS_MAIN, Layer._PTS_FORE):
+            canvas[pts_layer.value].stroke_style = "orange"
+            canvas[pts_layer.value].fill_style = "orange"
 
-        canvas[Layer._MAIN.value].stroke_style = "orange"
-        canvas[Layer._MAIN.value].fill_style = "orange"
+        for algo_layer in (Layer._ALGO_BACK, Layer._ALGO_MAIN, Layer._ALGO_FORE):
+            canvas[algo_layer.value].line_width = 2
+            canvas[algo_layer.value].stroke_style = "blue"
+            canvas[algo_layer.value].fill_style = "rgba(0, 0, 255, 0.2)"
 
-        canvas[Layer._FORE.value].stroke_style = "black"
-        canvas[Layer._FORE.value].fill_style = "rgba(0, 0, 0, 0.2)"
+        canvas[Layer._FRONT.value].stroke_style = "black"
+        canvas[Layer._FRONT.value].fill_style = "rgba(0, 0, 0, 0.2)"
 
         for value in map(lambda layer: layer.value, Layer):
             canvas[value].translate(0, self._height)
@@ -184,47 +188,45 @@ class Visualisation:
         if len(self._points) >= 999 or point in self._points:
             return False
         self._points.add(point)
-        self.draw_point(point, radius = radius, layer = Layer._MAIN)
+        self.draw_point(point, radius = radius, layer = Layer._PTS_MAIN)
         self._update_point_number_label()
         return True
 
     # TODO: Respect drawing modes.
     def add_points(self, points: Iterable[Point], radius: int = _DEFAULT_POINT_RADIUS):
-        with hold_canvas(self._canvas[Layer._MAIN.value]):
+        with hold_canvas(self._canvas[Layer._PTS_MAIN.value]):
             for point in points:
                 if len(self._points) >= 999:
                     break
                 if point in self._points:
                     continue
                 self._points.add(point)
-                self.draw_point(point, radius = radius, layer = Layer._MAIN)
+                self.draw_point(point, radius = radius, layer = Layer._PTS_MAIN)
         self._update_point_number_label()
 
     def _update_point_number_label(self):
         self._point_number_label.value = f"Number of points: {len(self._points):0>3}"
 
     def clear(self):
-        self.clear_background_layer()
-        self.clear_main_layer()
-        self.clear_foreground_layer()
+        self.clear_point_layers()
+        self.clear_algorithm_layers()
         self._clear_runtime_labels()
 
-    def clear_background_layer(self):
-        self._canvas[Layer._BACK.value].clear()
+    def clear_algorithm_layers(self):
+        self._canvas[Layer._ALGO_BACK.value].clear()
+        self._canvas[Layer._ALGO_MAIN.value].clear()
+        self._canvas[Layer._ALGO_FORE.value].clear()
+        self._canvas[Layer._PTS_FORE.value].clear()
+        self._canvas[Layer._FRONT.value].clear()
         if self._animation_was_started:
             self._animation_was_started = False
             self._init_canvas()
 
-    def clear_main_layer(self):
+    def clear_point_layers(self):
         self._points.clear()
-        self._canvas[Layer._MAIN.value].clear()
+        self._canvas[Layer._PTS_MAIN.value].clear()
+        self._canvas[Layer._PTS_FORE.value].clear()
         self._update_point_number_label()
-
-    def clear_foreground_layer(self):
-        self._canvas[Layer._FORE.value].clear()
-        if self._animation_was_started:
-            self._animation_was_started = False
-            self._init_canvas()
 
     def _clear_runtime_labels(self):
         for label in self._runtime_labels:
@@ -241,8 +243,7 @@ class Visualisation:
         label_index = len(self._runtime_labels)
         self._runtime_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
         def algorithm_callback():
-            self.clear_background_layer()
-            self.clear_foreground_layer()
+            self.clear_algorithm_layers()
             start_time = time.time()
             result = algorithm(self._points)
             end_time = time.time()
@@ -274,61 +275,65 @@ class Visualisation:
     ## Canvas drawing methods.
 
     # TODO: Respect drawing modes.
-    def draw_point(self, point: Point, radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._MAIN):
+    def draw_point(self, point: Point, radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._PTS_MAIN):
         self._canvas[layer.value].fill_circle(point.x, point.y, radius)
 
     # TODO: Respect drawing modes.
-    def draw_points(self, points: Iterable[Point], radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._MAIN):
+    def draw_points(self, points: Iterable[Point], radius: int = _DEFAULT_POINT_RADIUS, layer: Layer = Layer._PTS_MAIN):
         with hold_canvas(self._canvas[layer.value]):
             for point in points:
                 self.draw_point(point, radius = radius, layer = layer)
 
     # TODO: Respect drawing modes. Generalise 'background_points' and foreground drawings. Maybe make layer(s) selectable.
     def draw_polygon(self, polygon: Polygon, animate = False):
-        with hold_canvas(self._canvas[Layer._BACK.value]), hold_canvas(self._canvas[Layer._FORE.value]):
-            if animate:
-                if polygon.points:
-                    polygon.append(polygon.points[0])
+        if animate:
+            if polygon.points:
+                polygon.append(polygon.points[0])
 
-                current_points = []
-                background_points = []
+            current_points = []
+            background_points = []
 
-                self._animation_was_started = True
-                step_time = 1100 - 100 * self._animation_speed_slider.value
+            self._animation_was_started = True
+            step_time = 1.1 - 0.1 * self._animation_speed_slider.value
 
-                for event in polygon.events:
-                    if isinstance(event, AppendEvent) and current_points and event.point == current_points[-1]:
-                        continue
+            for event in polygon.events:
+                if isinstance(event, AppendEvent) and current_points and event.point == current_points[-1]:
+                    continue
 
-                    background_points.clear()
-                    event.execute_on(current_points, background_points)
+                background_points.clear()
+                event.execute_on(current_points, background_points)
 
-                    if background_points:
-                        self._canvas[Layer._FORE.value].clear()
-                        self._draw_static_path(background_points, Layer._FORE, close = True)
-                        self._canvas[Layer._FORE.value].sleep(2 * step_time)
-                        self._canvas[Layer._BACK.value].sleep(step_time)
-                    else:
-                        self._canvas[Layer._FORE.value].sleep(step_time)
+                if background_points:
+                    with hold_canvas(self._canvas[Layer._FRONT.value]):
+                        self._canvas[Layer._FRONT.value].clear()
+                        self._draw_static_path(background_points, Layer._FRONT, close = True)
+                    time.sleep(step_time)
 
-                    self._canvas[Layer._BACK.value].clear()
-                    self._draw_static_path(current_points, Layer._BACK)
+                with hold_canvas(self._canvas[Layer._PTS_FORE.value]), hold_canvas(self._canvas[Layer._ALGO_MAIN.value]):
+                    self._canvas[Layer._PTS_FORE.value].clear()
+                    self._canvas[Layer._ALGO_MAIN.value].clear()
                     for point in current_points[:-1]:
-                        #self.draw_point(point, radius = 6, layer = Layer._BACK)
-                        self._canvas[Layer._BACK.value].stroke_circle(point.x, point.y, 6)
-                    self.draw_point(current_points[-1], radius = 12, layer = Layer._BACK)
-                    self._canvas[Layer._BACK.value].sleep(step_time)
+                        self.draw_point(point, layer = Layer._PTS_FORE)
+                        self._canvas[Layer._ALGO_MAIN.value].stroke_circle(point.x, point.y, 6)
+                    self.draw_point(current_points[-1], layer = Layer._PTS_FORE)
+                    self.draw_point(current_points[-1], radius = 12, layer = Layer._ALGO_MAIN)
+                    self._draw_static_path(current_points, Layer._ALGO_MAIN)
+                time.sleep(step_time)
 
-                self._canvas[Layer._BACK.value].clear()
-                self._canvas[Layer._FORE.value].clear()
+            self._canvas[Layer._FRONT.value].clear()
+            self._canvas[Layer._PTS_FORE.value].clear()
+            self._canvas[Layer._ALGO_MAIN.value].clear()
 
-            self._draw_static_path(polygon.points, Layer._BACK, close = True, fill = True)
+        with hold_canvas(self._canvas[Layer._PTS_FORE.value]), hold_canvas(self._canvas[Layer._ALGO_MAIN.value]), \
+        hold_canvas(self._canvas[Layer._ALGO_BACK.value]):
             for point in polygon.points:
-                #self.draw_point(point, radius = 6, layer = Layer._BACK)
-                self._canvas[Layer._BACK.value].stroke_circle(point.x, point.y, 6)
+                self.draw_point(point, layer = Layer._PTS_FORE)
+                self._canvas[Layer._ALGO_MAIN.value].stroke_circle(point.x, point.y, 6)
+            self._draw_static_path(polygon.points, Layer._ALGO_MAIN, close = True)
+            self._draw_static_path(polygon.points, Layer._ALGO_BACK, close = True, stroke = False, fill = True)
 
 
-    def _draw_static_path(self, points: Iterable[Point], layer: Layer, close = False, fill = False):
+    def _draw_static_path(self, points: Iterable[Point], layer: Layer, close = False, stroke = True, fill = False):
         points_iterator = iter(points)
         first_point = next(points_iterator)
         self._canvas[layer.value].begin_path()
@@ -337,7 +342,8 @@ class Visualisation:
             self._canvas[layer.value].line_to(point.x, point.y)
         if close:
             self._canvas[layer.value].close_path()
-        self._canvas[layer.value].stroke()
+        if stroke:
+            self._canvas[layer.value].stroke()
         if fill:
             self._canvas[layer.value].fill()
 
