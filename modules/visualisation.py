@@ -38,7 +38,6 @@ class Visualisation:
         self._height = height
 
         self._points = set()
-        self._animation_was_started = False
         self._canvas_output = Output(layout = Layout(border = "1px solid black"))
 
         self._previous_callback_finish_time = time.time()
@@ -218,9 +217,6 @@ class Visualisation:
         self._canvas[Layer._ALGO_FORE.value].clear()
         self._canvas[Layer._PTS_FORE.value].clear()
         self._canvas[Layer._FRONT.value].clear()
-        if self._animation_was_started:
-            self._animation_was_started = False
-            self._init_canvas()
 
     def clear_point_layers(self):
         self._points.clear()
@@ -292,8 +288,6 @@ class Visualisation:
 
             current_points = []
             background_points = []
-
-            self._animation_was_started = True
             step_time = 1.1 - 0.1 * self._animation_speed_slider.value
 
             for event in polygon.events:
@@ -353,4 +347,3 @@ class Visualisation:
             self._draw_static_path(points, layer)
         else:
             pass """
-    
