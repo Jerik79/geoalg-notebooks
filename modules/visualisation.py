@@ -2,7 +2,7 @@ from enum import Enum, auto
 from typing import Callable, Iterable, Optional
 from ipycanvas import MultiCanvas, hold_canvas
 from ipywidgets import Output, Button, Label, Checkbox, HBox, VBox, IntSlider, Layout, HTML, dlink, Widget, BoundedIntText
-from IPython.display import display, Image, Markdown
+from IPython.display import display, display_html, Image, Markdown
 from geometry import Point, Polygon, AppendEvent
 import time
 import numpy as np
@@ -155,7 +155,7 @@ class Visualisation:
 
     ## Widget display and manipulation methods.
 
-    """ def display(self):
+    def display(self):
         def vbox_with_header(title: str, children: Iterable[Widget], right_aligned: bool = False) -> VBox:
             header = HTML(f"<h2>{title}</h2>", layout = Layout(align_self = "flex-start"))
             vbox_layout = Layout(padding = "0px 25px", align_items = "flex-start")
@@ -180,12 +180,13 @@ class Visualisation:
                 VBox([self._canvas_output, self._point_number_label]),
                 VBox([upper_ui_widget_row, lower_ui_widget_row])
             ], layout = Layout(justify_content = "space-around"))
-        ) """
+        )
 
-    def display(self, number = [2]):
+    """ def display(self, number = [2]):
         #display(Image(filename = f"../images/convex-hull-{number[0]}.png"))
-        display(Markdown(f"<img style='float: left;' src='../images/convex-hull-{number[0]}.png'>"))
-        number[0] += 1
+        #display(Markdown(f"<img style='float: left;' src='../images/convex-hull-{number[0]}.png'>"))
+        display_html(f"<img style='float: left;' src='../images/convex-hull-{number[0]}.png'>", raw = True)
+        number[0] += 1 """
 
     # TODO: Respect drawing modes.
     def add_point(self, point: Point, radius: int = _DEFAULT_POINT_RADIUS) -> bool:
