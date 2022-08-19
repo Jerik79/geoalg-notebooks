@@ -46,7 +46,7 @@ class Visualisation:
                 return
             if self.add_point(Point(x, self._height - y)):
                 self.clear_algorithm_layers()
-                self._clear_runtime_labels()
+                self._clear_time_labels()
         self._handle_click_on_canvas = handle_click_on_canvas
 
         self._init_canvas()
@@ -117,7 +117,7 @@ class Visualisation:
 
         self._instance_buttons = []
         self._algorithm_buttons = []
-        self._runtime_labels = []
+        self._time_labels = []
 
     def _init_animation_ui(self):
         self._animation_checkbox = Checkbox(
@@ -172,7 +172,7 @@ class Visualisation:
         lower_ui_widget_row = HBox([
             vbox_with_header("Instances", self._instance_buttons),
             vbox_with_header("Algorithms", self._algorithm_buttons),
-            vbox_with_header("Runtimes", self._runtime_labels, right_aligned = True)
+            vbox_with_header("Times", self._time_labels, right_aligned = True)
         ])
 
         display(
@@ -183,8 +183,6 @@ class Visualisation:
         )
 
     """ def display(self, number = [2]):
-        #display(Image(filename = f"../images/convex-hull-{number[0]}.png"))
-        #display(Markdown(f"<img style='float: left;' src='../images/convex-hull-{number[0]}.png'>"))
         display_html(f"<img style='float: left;' src='../images/convex-hull-{number[0]}.png'>", raw = True)
         number[0] += 1 """
 
@@ -215,7 +213,7 @@ class Visualisation:
     def clear(self):
         self.clear_point_layers()
         self.clear_algorithm_layers()
-        self._clear_runtime_labels()
+        self._clear_time_labels()
 
     def clear_algorithm_layers(self):
         self._canvas[Layer._ALGO_BACK.value].clear()
@@ -230,8 +228,8 @@ class Visualisation:
         self._canvas[Layer._PTS_FORE.value].clear()
         self._update_point_number_label()
 
-    def _clear_runtime_labels(self):
-        for label in self._runtime_labels:
+    def _clear_time_labels(self):
+        for label in self._time_labels:
             label.value = ""
 
     def register_instance(self, name: str, points: Iterable[Point]):
@@ -242,15 +240,15 @@ class Visualisation:
 
     # TODO: Respect drawing modes.
     def register_algorithm(self, name: str, algorithm: Callable):
-        label_index = len(self._runtime_labels)
-        self._runtime_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
+        label_index = len(self._time_labels)
+        self._time_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
         def algorithm_callback():
             self.clear_algorithm_layers()
             start_time = time.time()
             result = algorithm(self._points)
             end_time = time.time()
             self.draw_polygon(result, animate = self._animation_checkbox.value)
-            self._runtime_labels[label_index].value = f"{1000 * (end_time - start_time):.3f} ms"
+            self._time_labels[label_index].value = f"{1000 * (end_time - start_time):.3f} ms"
         self._algorithm_buttons.append(self._create_button(name, algorithm_callback))
 
     def _create_button(self, description: str, callback: Callable, layout: Optional[Layout] = None) -> Button:
