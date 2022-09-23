@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import TypeVar, Generic, Optional, Iterable, Callable, Any
 from enum import Enum
 from itertools import chain
@@ -64,7 +65,7 @@ class BinaryTree(Generic[K, V]):
 
 
 class Node(Generic[K, V]):
-    def __init__(self, key: K, value: V, level: int, left: 'Node[K, V]', right: 'Node[K, V]'):
+    def __init__(self, key: K, value: V, level: int, left: Node[K, V], right: Node[K, V]):
         self.key = key
         self.value = value
         self.level = level
@@ -96,13 +97,13 @@ class Node(Generic[K, V]):
         #return self.level == 1     # THIS IS WRONG
         return not self.is_empty() and self.left.is_empty() and self.right.is_empty()
 
-    def get_successor(self) -> 'Node[K,V]':     # fails if self or self.right is empty... TODO: Add checks?
+    def get_successor(self) -> Node[K,V]:     # fails if self or self.right is empty... TODO: Add checks?
         successor = self.right
         while not successor.left.is_empty():
             successor = successor.left
         return successor
 
-    def get_predecessor(self) -> 'Node[K,V]':   # fails if self or self.left is empty... TODO: Add checks?
+    def get_predecessor(self) -> Node[K,V]:   # fails if self or self.left is empty... TODO: Add checks?
         predecessor = self.left
         while not predecessor.right.is_empty():
             predecessor = predecessor.right
