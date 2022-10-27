@@ -248,12 +248,18 @@ class Visualisation:
         self._time_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
         def algorithm_callback():
             self.clear_algorithm_output()
+            self._time_labels[label_index].value = "RUNNING"        # TODO: Refine this.
             start_time = time.time()
-            algorithm_output = algorithm(self._current_instance)
+            try:
+                algorithm_output = algorithm(self._current_instance)
+            except:
+                self._time_labels[label_index].value = "ERROR"
+                return
             end_time = time.time()
             if not self._animation_checkbox.value:
                 self._algorithm_drawer.draw(algorithm_output.points())
             else:
+                self._time_labels[label_index].value = "ANIMATING"
                 animation_time_step = 1.1 - 0.1 * self._animation_speed_slider.value
                 if hasattr(algorithm_output, "animation_events"):
                     animation_events = algorithm_output.animation_events()

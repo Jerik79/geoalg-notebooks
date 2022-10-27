@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Generic, Optional, Iterable, Callable, Any
+from typing import TypeVar, Generic, Optional, Iterator, Callable, Any
 from enum import Enum
 from itertools import chain
 from abc import ABC, abstractmethod
@@ -11,269 +11,293 @@ V = TypeVar("V")
 Updater = Callable[[Optional[V]], V]
 
 class ComparisonResult(Enum):
-    SMALLER = -1
-    EQUAL = 0
-    GREATER = 1
+    BEFORE = -1
+    MATCH = 0
+    AFTER = 1
 
 class Comparator(ABC, Generic[K]):
     @abstractmethod
-    def __call__(self, key: K, item: Any) -> ComparisonResult:
+    def compare(self, item: Any, key: K) -> ComparisonResult:
         pass
 
 class DefaultComparator(Generic[K]):
-    def __call__(self, key: K, item: Any) -> ComparisonResult:
-        if key < item:
-            return ComparisonResult.SMALLER
-        elif key == item:
-            return ComparisonResult.EQUAL
-        elif key > item:
-            return ComparisonResult.GREATER
-        # TODO: raise Error otherwise
+    def compare(self, item: Any, key: K) -> ComparisonResult:
+        if item == key:
+            return ComparisonResult.MATCH
+        elif item < key:
+            return ComparisonResult.BEFORE
+        elif item > key:
+            return ComparisonResult.AFTER
+        else:
+            raise RuntimeError(f"Default comparator can't determine order for {item} and {key}.")
 
 
-class BinaryTree(Generic[K, V]):
+# TODO: More methods like contains(key) and pop_last() could be implemented.
+class BinaryTree(Generic[K]):
     def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
-        self.root: Node[K, V] = Node.empty_node()
-        self.comparator = comparator
+        self._root: Node[K, None] = Node.empty_node()
+        self._comparator = comparator
 
     def is_empty(self) -> bool:
-        return self.root.is_empty()
+        return self._root.is_empty()
+
+    def insert(self, key: K) -> bool:
+        return self._root.insert(key, None, self._comparator)
+
+    def delete(self, key: K) -> bool:
+        return self._root.delete(key, self._comparator)[0]
+
+    def pop_first(self) -> K:
+        return self._root.pop_first(self._comparator)[0]
+
+    def search_matching(self, item: Any) -> list[K]:
+        return list(self._root.search_matching(item, self._comparator))
+
+    def search_predecessor(self, item: Any) -> Optional[K]:
+        return self._root.search_predecessor(item, self._comparator)
+
+    def search_successor(self, item: Any) -> Optional[K]:
+        return self._root.search_successor(item, self._comparator)
+
+    def __repr__(self) -> str:            # TODO: Remove this.
+        return self._root.__repr__()
+
+# TODO: The values should be utilised more. There isn't even a get_value(key) method right now.
+class BinaryTreeDict(Generic[K, V]):
+    def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
+        self._root: Node[K, V] = Node.empty_node()
+        self._comparator = comparator
+
+    def is_empty(self) -> bool:
+        return self._root.is_empty()
 
     def insert(self, key: K, value: V) -> bool:
-        return self.root.insert(key, value, self.comparator)
+        return self._root.insert(key, value, self._comparator)
 
-    def update(self, key: K, updater: Updater[V]) -> bool:
-        return self.root.update(key, updater, self.comparator)
+    def update(self, key: K, value_updater: Updater[V]) -> bool:
+        return self._root.update(key, value_updater, self._comparator)
 
-    def delete(self, key: K) -> Optional[V]:
-        return self.root.delete(key, self.comparator)
+    def delete(self, key: K) -> tuple[bool, Optional[V]]:
+        return self._root.delete(key, self._comparator)
 
-    def pop_smallest(self) -> tuple[K, V]:
-        return self.root.pop_smallest(self.comparator)
+    def pop_first(self) -> tuple[K, V]:
+        return self._root.pop_first(self._comparator)
 
-    def smaller_neighbour(self, item: Any) -> Optional[K]:
-        return self.root.smaller_neighbour(item, self.comparator)
+    def search_matching(self, item: Any) -> list[K]:
+        return list(self._root.search_matching(item, self._comparator))
 
-    def greater_neighbour(self, item: Any) -> Optional[K]:
-        return self.root.greater_neighbour(item, self.comparator)
+    def search_predecessor(self, item: Any) -> Optional[K]:
+        return self._root.search_predecessor(item, self._comparator)
 
-    def range_between_neighbours(self, item: Any) -> list[K]:      # TODO: is list conversion necessary?
-        return list(self.root.range_between_neighbours(item, self.comparator))
+    def search_predecessor(self, item: Any) -> Optional[K]:
+        return self._root.search_successor(item, self._comparator)
 
-    def __repr__(self) -> str:
-        return self.root.__repr__()
-
+    def __repr__(self) -> str:            # TODO: Remove this.
+        return self._root.__repr__()
 
 class Node(Generic[K, V]):
-    def __init__(self, key: K, value: V, level: int, left: Node[K, V], right: Node[K, V]):
-        self.key = key
-        self.value = value
-        self.level = level
-        self.left = left
-        self.right = right
+    def __init__(self, key: Optional[K], value: Optional[V], level: int,
+    left: Optional[Node[K, V]], right: Optional[Node[K, V]]):
+        self._key = key
+        self._value = value
+        self._level = level
+        self._left = left
+        self._right = right
 
     @classmethod
-    def empty_node(cls) -> 'Node':
+    def empty_node(cls) -> Node:
         return cls(None, None, 0, None, None)
 
-    def make_empty(self):
-        self.key = None
-        self.value = None
-        self.level = 0
-        self.left = None
-        self.right = None
+    def _make_empty(self):
+        self._key = None
+        self._value = None
+        self._level = 0
+        self._left = None
+        self._right = None
 
     def is_empty(self) -> bool:
-        return self.level == 0      # TODO: maybe use "left is None and right is None" instead...
+        return self._level == 0
 
-    def make_leaf(self, key: K, value: V):
-        self.key = key
-        self.value = value
-        self.level = 1
-        self.left = Node.empty_node()
-        self.right = Node.empty_node()
+    def _make_leaf(self, key: K, value: V):
+        self._key = key
+        self._value = value
+        self._level = 1
+        self._left = Node.empty_node()
+        self._right = Node.empty_node()
 
-    def is_leaf(self) -> bool:
-        #return self.level == 1     # THIS IS WRONG
-        return not self.is_empty() and self.left.is_empty() and self.right.is_empty()
+    def _is_leaf(self) -> bool:
+        return self._level == 1 and self._left.is_empty() and self._right.is_empty()
 
-    def get_successor(self) -> Node[K,V]:     # fails if self or self.right is empty... TODO: Add checks?
-        successor = self.right
-        while not successor.left.is_empty():
-            successor = successor.left
-        return successor
+    def _replace_with_predecessor(self, comparator: Comparator[K]):
+        predecessor = self._left
+        while not predecessor._right.is_empty():
+            predecessor = predecessor._right
+        self._key = predecessor._key
+        self._value = predecessor._value
+        self._left.delete(predecessor._key, comparator)
 
-    def get_predecessor(self) -> Node[K,V]:   # fails if self or self.left is empty... TODO: Add checks?
-        predecessor = self.left
-        while not predecessor.right.is_empty():
-            predecessor = predecessor.right
-        return predecessor
+    def _replace_with_successor(self, comparator: Comparator[K]):
+        successor = self._right
+        while not successor._left.is_empty():
+            successor = successor._left
+        self._key = successor._key
+        self._value = successor._value
+        self._right.delete(successor._key, comparator)
 
-    def replace_with_successor(self, comparator: Comparator[K]):
-        successor = self.get_successor()
-        self.key = successor.key
-        self.value = successor.value
-        self.right.delete(successor.key, comparator)
-
-    def replace_with_predecessor(self, comparator: Comparator[K]):
-        predecessor = self.get_predecessor()
-        self.key = predecessor.key
-        self.value = predecessor.value
-        self.left.delete(predecessor.key, comparator)
-
-    def skew(self):
-        if self.is_empty() or self.left.is_empty():
+    def _skew(self):
+        if self.is_empty() or self._left.is_empty():
             return
         
-        if self.left.level == self.level:
-            self.right = Node(self.key, self.value, self.level, self.left.right, self.right)   # TODO: remove allocation?
-            self.key = self.left.key
-            self.value = self.left.value
-            self.left = self.left.left
+        if self._left._level == self._level:
+            self._right = Node(self._key, self._value, self._level, self._left._right, self._right)
+            self._key = self._left._key
+            self._value = self._left._value
+            self._left = self._left._left
 
-    def split(self):
-        if self.is_empty() or self.right.is_empty() or self.right.right.is_empty():
+    def _split(self):
+        if self.is_empty() or self._right.is_empty() or self._right._right.is_empty():
             return
 
-        if self.right.right.level == self.level:
-            self.left = Node(self.key, self.value, self.level, self.left, self.right.left)     # TODO: remove allocation?
-            self.key = self.right.key
-            self.value = self.right.value
-            self.level = self.right.level + 1
-            self.right = self.right.right
+        if self._right._right._level == self._level:
+            self._left = Node(self._key, self._value, self._level, self._left, self._right._left)
+            self._key = self._right._key
+            self._value = self._right._value
+            self._level = self._right._level + 1
+            self._right = self._right._right
 
-    def adjust_after_deletion(self):
+    def _adjust_after_deletion(self):
         if self.is_empty():
             return
 
-        level = min(self.left.level, self.right.level) + 1
-        if level < self.level:
-            self.level = level
-            if level < self.right.level:
-                self.right.level = level
+        level = min(self._left._level, self._right._level) + 1
+        if level < self._level:
+            self._level = level
+            if level < self._right._level:
+                self._right._level = level
         
-        self.skew()
-        self.right.skew()
-        if not self.right.is_empty():
-            self.right.right.skew()
-        self.split()
-        self.right.split()
+        self._skew()
+        self._right._skew()
+        if not self._right.is_empty():
+            self._right._right._skew()
+        self._split()
+        self._right._split()
 
-    def insert(self, key: K, value: V, comparator: Comparator[K]) -> bool:     # TODO: another method for overwriting insertions returning the old value?
+    def insert(self, key: K, value: V, comparator: Comparator[K]) -> bool:
         if self.is_empty():
-            self.make_leaf(key, value)
+            self._make_leaf(key, value)
             return False
         
-        cr = comparator(self.key, key)
-        if cr is ComparisonResult.GREATER:
-            was_key_present = self.left.insert(key, value, comparator)
-        elif cr is ComparisonResult.SMALLER:
-            was_key_present = self.right.insert(key, value, comparator)
+        cr = comparator.compare(key, self._key)
+        if cr is ComparisonResult.BEFORE:
+            was_key_present = self._left.insert(key, value, comparator)
+        elif cr is ComparisonResult.AFTER:
+            was_key_present = self._right.insert(key, value, comparator)
         else:
             was_key_present = True
 
         if not was_key_present:
-            self.skew()
-            self.split()
+            self._skew()
+            self._split()
         return was_key_present
 
-    def update(self, key: K, updater: Updater[V], comparator: Comparator[K]) -> bool:
+    def update(self, key: K, value_updater: Updater[V], comparator: Comparator[K]) -> bool:
         if self.is_empty():
-            self.make_leaf(key, updater(None))
+            self._make_leaf(key, value_updater(None))
             return False
         
-        cr = comparator(self.key, key)
-        if cr is ComparisonResult.GREATER:
-            was_key_present = self.left.update(key, updater, comparator)
-        elif cr is ComparisonResult.SMALLER:
-            was_key_present = self.right.update(key, updater, comparator)
+        cr = comparator.compare(key, self._key)
+        if cr is ComparisonResult.BEFORE:
+            was_key_present = self._left.update(key, value_updater, comparator)
+        elif cr is ComparisonResult.AFTER:
+            was_key_present = self._right.update(key, value_updater, comparator)
         else:
-            self.value = updater(self.value)
+            self._value = value_updater(self._value)
             was_key_present = True
 
         if not was_key_present:
-            self.skew()
-            self.split()
+            self._skew()
+            self._split()
         return was_key_present
 
-    def delete(self, key: K, comparator: Comparator[K]) -> Optional[V]:
+    def delete(self, key: K, comparator: Comparator[K]) -> tuple[bool, Optional[V]]:
+        if self.is_empty():
+            return False, None
+        
+        cr = comparator.compare(key, self._key)
+        if cr is ComparisonResult.BEFORE:
+            was_key_present, value = self._left.delete(key, comparator)
+        elif cr is ComparisonResult.AFTER:
+            was_key_present, value = self._right.delete(key, comparator)
+        else:
+            was_key_present, value = True, self._value
+            if self._is_leaf():
+                self._make_empty()
+            elif not self._left.is_empty():
+                self._replace_with_predecessor(comparator)
+            else:
+                self._replace_with_successor(comparator)
+        
+        if was_key_present:
+            self._adjust_after_deletion()
+        return was_key_present, value
+
+    def pop_first(self, comparator: Comparator[K]) -> Optional[tuple[K, V]]:
         if self.is_empty():
             return None
-        
-        cr = comparator(self.key, key)
-        if cr is ComparisonResult.GREATER:
-            value = self.left.delete(key, comparator)
-        elif cr is ComparisonResult.SMALLER:
-            value = self.right.delete(key, comparator)
+
+        if not self._left.is_empty():
+            key, value = self._left.pop_first(comparator)
         else:
-            value = self.value
-            if self.is_leaf():
-                self.make_empty()
-            elif self.left.is_empty():
-                self.replace_with_successor(comparator)
+            key = self._key
+            value = self._value
+            if self._is_leaf():
+                self._make_empty()
             else:
-                self.replace_with_predecessor(comparator)
-
-        self.adjust_after_deletion()        # TODO: this is only necessary if a deletion occured...
-        return value
-
-    def pop_smallest(self, comparator: Comparator[K]) -> tuple[K, V]:
-        if self.is_empty():
-            return None      # TODO: maybe throw assertion instead...
-
-        if not self.left.is_empty():
-            key, value = self.left.pop_smallest(comparator)
-        else:
-            key = self.key
-            value = self.value
-            if self.is_leaf():
-                self.make_empty()
-            else:
-                self.replace_with_successor(comparator)
+                self._replace_with_successor(comparator)
         
-        self.adjust_after_deletion()
+        self._adjust_after_deletion()
         return key, value
 
-    def smaller_neighbour(self, item: Any, comparator: Comparator[K], previous_key: Optional[K] = None) -> Optional[K]:   # TODO: Also return value?
-        if self.is_empty():
-            return previous_key
-
-        if comparator(self.key, item) is ComparisonResult.SMALLER:
-            return self.right.smaller_neighbour(item, comparator, self.key)
-        else:
-            return self.left.smaller_neighbour(item, comparator, previous_key)
-
-    def greater_neighbour(self, item: Any, comparator: Comparator[K], previous_key: Optional[K] = None) -> Optional[K]:   # TODO: Also return value?
-        if self.is_empty():
-            return previous_key
-
-        if comparator(self.key, item) is ComparisonResult.GREATER:
-            return self.left.greater_neighbour(item, comparator, self.key)
-        else:
-            return self.right.greater_neighbour(item, comparator, previous_key)
-
-    def range_between_neighbours(self, item: Any, comparator: Comparator[K]) -> Iterable[K]:      # running time is in O(log(n) * |output|)
+    def search_matching(self, item: Any, comparator: Comparator[K]) -> Iterator[K]:
         if self.is_empty():
             return ()
 
-        cr = comparator(self.key, item)
-        if cr is ComparisonResult.GREATER:
-            return self.left.range_between_neighbours(item, comparator)
-        elif cr is ComparisonResult.SMALLER:
-            return self.right.range_between_neighbours(item, comparator)
+        cr = comparator.compare(item, self._key)
+        if cr is ComparisonResult.BEFORE:
+            return self._left.search_matching(item, comparator)
+        elif cr is ComparisonResult.AFTER:
+            return self._right.search_matching(item, comparator)
         else:
             return chain(
-                self.left.range_between_neighbours(item, comparator),
-                (self.key,),
-                self.right.range_between_neighbours(item, comparator)
+                self._left.search_matching(item, comparator),
+                (self._key,),
+                self._right.search_matching(item, comparator)
             )
 
-    def __repr__(self) -> str:
+    def search_predecessor(self, item: Any, comparator: Comparator[K], candidate: Optional[K] = None) -> Optional[K]:
+        if self.is_empty():
+            return candidate
+
+        if comparator.compare(item, self._key) is ComparisonResult.AFTER:
+            return self._right.search_predecessor(item, comparator, self._key)
+        else:
+            return self._left.search_predecessor(item, comparator, candidate)
+
+    def search_successor(self, item: Any, comparator: Comparator[K], candidate: Optional[K] = None) -> Optional[K]:
+        if self.is_empty():
+            return candidate
+
+        if comparator.compare(item, self._key) is ComparisonResult.BEFORE:
+            return self._left.search_successor(item, comparator, self._key)
+        else:
+            return self._right.search_successor(item, comparator, candidate)
+
+    def __repr__(self) -> str:      # TODO: Remove this.
         if self.is_empty():
             return ", "
-        if self.value:
-            return f"{self.key}/{self.value} <{self.left.__repr__()}> <{self.right.__repr__()}>"
+        if self._value:
+            return f"{self._key}/{self._value} <{self._left.__repr__()}> <{self._right.__repr__()}>"
             #return f"{self.left.__repr__()}{self.key}:{self.value}{self.right.__repr__()}"
         else:
-            return f"{self.key} <{self.left.__repr__()}> <{self.right.__repr__()}>"
+            return f"{self._key} <{self._left.__repr__()}> <{self._right.__repr__()}>"
             #return f"{self.left.__repr__()}{self.key}{self.right.__repr__()}"
