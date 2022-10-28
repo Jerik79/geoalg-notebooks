@@ -1,9 +1,9 @@
-from collections import deque
 from itertools import chain
-from typing import Callable, Iterable, Optional, Type
+from typing import Callable, Generic, TypeVar, Optional, Iterable
 import time
 
-from geometry import Point
+from geometry import GeometricPrimitive, Point
+from .instances import Algorithm, InstanceHandle, PointSetInstance, LineSegmentSetInstance
 from .drawing import AppendEvent, DrawingMode, InstanceDrawer, AlgorithmDrawer
 from .drawing import PointsMode, SweepLineMode, PathMode, PolygonMode, FixedVertexNumberPathsMode, LineSegmentsMode
 
@@ -13,7 +13,9 @@ from IPython.display import display, display_html
 import numpy as np
 
 
-class Visualisation:
+T = TypeVar("T")
+
+class Visualisation(Generic[T]):
     ## Constants.
 
     _DEFAULT_VBOX_ITEM_MARGIN = "0px 0px 20px 0px"
@@ -30,35 +32,26 @@ class Visualisation:
 
     ## Initialisation methods.
 
-    def __init__(self, width: int, height: int, instance_type: Type, instance_mode: DrawingMode):
+    def __init__(self, width: int, height: int, instance: InstanceHandle[T]):
         self._width = width
         self._height = height
 
-        self._current_instance = set()
-        self._point_buffer = deque()
-        self._point_counter = 0
+        self._instance = instance
+        self._number_of_points = 0
 
-        if not hasattr(instance_type, "add_point_to_instance"):
-            raise ValueError("Instance type is not supported.")
-        self._instance_type = instance_type
-
-        self._init_canvas(instance_mode)
-        self._init_ui()
-
-    def _init_canvas(self, instance_mode: DrawingMode):
         self._multi_canvas = MultiCanvas(8, width = self._width, height = self._height)
         for i in range(0, 8):
             self._multi_canvas[i].translate(0, self._height)
             self._multi_canvas[i].scale(1, -1)
 
         self._instance_drawer = InstanceDrawer(
-            instance_mode,
+            instance.drawing_mode(),
             self._multi_canvas[self._INSTANCE_BACK],
             self._multi_canvas[self._INSTANCE_MAIN],
             self._multi_canvas[self._INSTANCE_FRONT],
             self._multi_canvas[self._INSTANCE_HIGHLIGHT]
         )
-        self._algorithm_drawer = None
+        self._current_algorithm_drawer = None
 
         self._previous_callback_finish_time = time.time()
         def handle_click_on_canvas(x, y):
@@ -73,6 +66,8 @@ class Visualisation:
         with self._canvas_output:
             display(self._multi_canvas)
 
+        self._init_ui()
+
     def _init_ui(self):
         self._instance_size_label = Label()
         self._update_instance_size_label()
@@ -80,18 +75,18 @@ class Visualisation:
         self._clear_canvas_button = self._create_button("Clear canvas", self.clear)
 
         self._random_button_int_text = BoundedIntText(
-            value = 250,        # TODO: Maybe make this configurable (or dependent on instance type).
+            value = self._instance.default_random_point_number(),
             min = 1,
             max = 999,
             layout = Layout(width = "55px")
         )
-        def get_random_value(maximum: int) -> np.float64:       # TODO: Maybe make this configurable (or dependent on instance type).
-            return np.clip(np.random.normal(0.5 * maximum, 0.15 * maximum), 0, maximum)
         def random_button_callback():
             self.clear()
             self.add_points([
-                Point(get_random_value(self._width), get_random_value(self._height))
-                for _ in range(self._random_button_int_text.value)
+                Point(
+                    self._instance.get_random_coordinate(self._width),
+                    self._instance.get_random_coordinate(self._height)
+                ) for _ in range(self._random_button_int_text.value)
             ])
         self._random_button = self._create_button(
             "Random",
@@ -184,47 +179,46 @@ class Visualisation:
         number[0] += 1 """
 
     def add_point(self, point: Point) -> bool:
-        if self._point_counter >= 999:
+        if self._number_of_points >= 999:
             return False
-        needs_draw = self._instance_type.add_point_to_instance(self._current_instance, self._point_buffer, point)
+        needs_draw = self._instance.add_point(point)
         if needs_draw:
             self._instance_drawer.draw((point,))
-            self._point_counter += 1
+            self._number_of_points += 1
             self._update_instance_size_label()
         return needs_draw
 
     def add_points(self, points: Iterable[Point]):
         points_to_draw = []
         for point in points:
-            if self._point_counter >= 999:
+            if self._number_of_points >= 999:
                 break
-            if self._instance_type.add_point_to_instance(self._current_instance, self._point_buffer, point):
+            if self._instance.add_point(point):
                 points_to_draw.append(point)
-                self._point_counter += 1
+                self._number_of_points += 1
         self._instance_drawer.draw(points_to_draw)
         self._update_instance_size_label()
 
     def _update_instance_size_label(self):
-        label_value = f"Instance size: {len(self._current_instance):0>3}"
-        if self._point_counter != len(self._current_instance):
-            label_value += f" (Number of points: {self._point_counter:0>3})"
+        label_value = f"Instance size: {len(self._instance):0>3}"
+        if self._number_of_points != len(self._instance):
+            label_value += f" (Number of points: {self._number_of_points:0>3})"
         self._instance_size_label.value = label_value
 
     def clear(self):
-        self.clear_current_instance()
+        self.clear_instance()
         self.clear_algorithm_output()
         self._clear_time_labels()
 
-    def clear_algorithm_output(self):
-        if self._algorithm_drawer is not None:
-            self._algorithm_drawer.clear()
-
-    def clear_current_instance(self):
-        self._current_instance.clear()
-        self._point_buffer.clear()
+    def clear_instance(self):
+        self._instance.clear()
         self._instance_drawer.clear()
-        self._point_counter = 0
+        self._number_of_points = 0
         self._update_instance_size_label()
+
+    def clear_algorithm_output(self):
+        if self._current_algorithm_drawer is not None:
+            self._current_algorithm_drawer.clear()
 
     def _clear_time_labels(self):
         for label in self._time_labels:
@@ -237,7 +231,7 @@ class Visualisation:
             self.add_points(instance_points)
         self._example_buttons.append(self._create_button(name, instance_callback))
 
-    def register_algorithm(self, name: str, algorithm: Callable, drawing_mode: DrawingMode):
+    def register_algorithm(self, name: str, algorithm: Algorithm[T], drawing_mode: DrawingMode):
         algorithm_drawer = AlgorithmDrawer(
             drawing_mode,
             self._multi_canvas[self._ALGORITHM_BACK],
@@ -250,25 +244,19 @@ class Visualisation:
         def algorithm_callback():
             self.clear_algorithm_output()
             self._time_labels[label_index].value = "RUNNING"        # TODO: Refine this.
-            start_time = time.time()
             try:
-                algorithm_output = algorithm(self._current_instance)
+                algorithm_output, algorithm_running_time = self._instance.run_algorithm(algorithm)
             except:
                 self._time_labels[label_index].value = "ERROR"
                 return
-            end_time = time.time()
             if not self._animation_checkbox.value:
                 algorithm_drawer.draw(algorithm_output.points())
             else:
                 self._time_labels[label_index].value = "ANIMATING"
                 animation_time_step = 1.1 - 0.1 * self._animation_speed_slider.value
-                if hasattr(algorithm_output, "animation_events"):
-                    animation_events = algorithm_output.animation_events()
-                else:
-                    animation_events = (AppendEvent(point) for point in algorithm_output.points())
-                algorithm_drawer.animate(animation_events, animation_time_step)
-            self._time_labels[label_index].value = f"{1000 * (end_time - start_time):.3f} ms"
-            self._algorithm_drawer = algorithm_drawer
+                algorithm_drawer.animate(algorithm_output.animation_events(), animation_time_step)
+            self._time_labels[label_index].value = f"{algorithm_running_time:.3f} ms"
+            self._current_algorithm_drawer = algorithm_drawer
         self._algorithm_buttons.append(self._create_button(name, algorithm_callback))
 
     def _create_button(self, description: str, callback: Callable, layout: Optional[Layout] = None) -> Button:

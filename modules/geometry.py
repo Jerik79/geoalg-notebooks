@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, Iterator, Union, Any
 from enum import Enum, auto
-from collections import deque, OrderedDict
+from collections import OrderedDict
 import math
 
 
@@ -21,6 +21,9 @@ class GeometricPrimitive(ABC):
     @abstractmethod
     def points(self) -> Iterator[Point]:
         pass
+
+    def animation_events(self) -> Iterator[AnimationEvent]:
+        return (AppendEvent(point) for point in self.points())
 
 
 class Point(GeometricPrimitive):
@@ -84,13 +87,6 @@ class Point(GeometricPrimitive):
 
     def points(self) -> Iterator[Point]:
         yield self
-
-    @staticmethod
-    def add_point_to_instance(instance: set[Point], _: deque[Point], new_point: Point) -> bool:
-        if new_point in instance:
-            return False
-        instance.add(new_point)
-        return True
 
 class PointReference(Point):
     def __init__(self, container: list[Point], position: int):
@@ -163,18 +159,6 @@ class LineSegment(GeometricPrimitive):
     def points(self) -> Iterator[Point]:
         yield self.upper
         yield self.lower
-
-    @staticmethod
-    def add_point_to_instance(instance: set[LineSegment], point_buffer: deque[Point], new_point: Point) -> bool:
-        if not point_buffer:
-            point_buffer.append(new_point)
-            return True
-        line_segment = LineSegment(point_buffer[0], new_point)
-        if line_segment in instance:
-            return False
-        instance.add(line_segment)
-        point_buffer.popleft()
-        return True
 
 
 from visualisation.drawing import AnimationEvent, AppendEvent, PopEvent, DeleteEvent
@@ -259,4 +243,4 @@ class Intersections(GeometricPrimitive):
         return iter(self._intersections)
 
     def animation_events(self) -> Iterator[AnimationEvent]:
-        return self._animation_events
+        return iter(self._animation_events)
