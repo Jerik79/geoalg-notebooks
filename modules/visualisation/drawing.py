@@ -150,6 +150,51 @@ class PointsMode(DrawingMode):
         drawer.clear()
         self.draw(drawer, points)
 
+class SweepLineMode(DrawingMode):       # TODO: Avoid code duplication, if possible.
+    def draw(self, drawer: Drawer, points: Iterable[Point]):
+        with drawer._main_canvas.hold():
+            for point in points:
+                drawer._main_canvas.draw_point(point)
+
+    def _draw_animation_step(self, drawer: Drawer, points: list[Point]):
+        with drawer._main_canvas.hold(), drawer._back_canvas.hold():
+            drawer._main_canvas.clear()
+            drawer._back_canvas.clear()
+            drawer._highlight_canvas.clear()
+            if points:
+                for point in points[:-1]:
+                    drawer._main_canvas.draw_point(point)
+                drawer._main_canvas.draw_point(points[-1], radius = 12, transparent = True)
+                drawer._highlight_canvas.draw_path((Point(0, points[-1].y), Point(drawer._width, points[-1].y)))
+
+    def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
+        drawer.clear()
+
+        points: list[Point] = []
+
+        event_iterator = iter(animation_events)
+        next_event = next(event_iterator, None)
+
+        while next_event is not None:
+            event = next_event
+            next_event = next(event_iterator, None)
+
+            if points:
+                if isinstance(event, PopEvent) and isinstance(next_event, AppendEvent):
+                    event = SetEvent(-1, next_event.point)
+                if isinstance(event, AppendEvent) or (isinstance(event, SetEvent) and event.key == -1):
+                    if event.point == points[-1]:
+                        continue
+
+            event.execute_on(points)
+            if isinstance(event, PopEvent) and next_event is None:
+                break
+            self._draw_animation_step(drawer, points)
+            time.sleep(animation_time_step)
+
+        drawer.clear()
+        self.draw(drawer, points)
+
 class PathMode(DrawingMode):
     def __init__(self, draw_vertices: bool):
         self._draw_vertices = draw_vertices
@@ -270,6 +315,7 @@ class Drawer:
         self._main_canvas = CanvasDrawingHandle(main_canvas)
         self._front_canvas = CanvasDrawingHandle(front_canvas)
         self._highlight_canvas = CanvasDrawingHandle(highlight_canvas)
+        self._width = main_canvas.width
 
     def _get_drawing_mode_state(self, default: Any) -> Any:
         if self._drawing_mode_state is None:
@@ -303,7 +349,7 @@ class AlgorithmDrawer(Drawer):
     highlight_canvas: Canvas):
         super().__init__(drawing_mode, back_canvas, main_canvas, front_canvas, highlight_canvas)
 
-        for canvas in (self._back_canvas, self._main_canvas):
+        for canvas in (self._back_canvas, self._main_canvas):       # TODO: Move this elsewhere, since there can be multiple AlgorithmDrawers...
             canvas.set_colour(0, 0, 255)
             canvas.set_line_width(2)
 

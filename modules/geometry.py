@@ -197,8 +197,8 @@ class Polygon(GeometricPrimitive):
         return point
 
     def animate(self, point: Point):
-        self.append(point)
-        self.pop()
+        self._animation_events.append(AppendEvent(point))
+        self._animation_events.append(PopEvent())
 
     def __repr__(self) -> str:
         return self._points.__repr__()
@@ -239,12 +239,18 @@ class Polygon(GeometricPrimitive):
 
 class Intersections(GeometricPrimitive):
     def __init__(self):
-        self._intersections: OrderedDict[Point, set[LineSegment]] = {}
+        self._intersections: OrderedDict[Point, set[LineSegment]] = OrderedDict()
+        self._animation_events: list[AnimationEvent] = []
 
     def add(self, intersection_point: Point, line_segments: Iterable[LineSegment]):
         point_segments = self._intersections.setdefault(intersection_point, set())
         for line_segment in line_segments:
             point_segments.add(line_segment)
+        self._animation_events.append(AppendEvent(intersection_point))
+
+    def animate(self, point: Point):
+        self._animation_events.append(AppendEvent(point))
+        self._animation_events.append(PopEvent())
 
     def __repr__(self) -> str:
         return "\n".join(f"{point}: {segments}" for point, segments in self._intersections.items())
@@ -253,4 +259,4 @@ class Intersections(GeometricPrimitive):
         return iter(self._intersections)
 
     def animation_events(self) -> Iterator[AnimationEvent]:
-        return (AppendEvent(point) for point in self.points())
+        return self._animation_events

@@ -5,7 +5,7 @@ import time
 
 from geometry import Point
 from .drawing import AppendEvent, DrawingMode, InstanceDrawer, AlgorithmDrawer
-from .drawing import PointsMode, PathMode, PolygonMode, FixedVertexNumberPathsMode, LineSegmentsMode
+from .drawing import PointsMode, SweepLineMode, PathMode, PolygonMode, FixedVertexNumberPathsMode, LineSegmentsMode
 
 from ipycanvas import MultiCanvas
 from ipywidgets import Output, Button, Label, Checkbox, HBox, VBox, IntSlider, Layout, HTML, dlink, Widget, BoundedIntText
@@ -30,8 +30,7 @@ class Visualisation:
 
     ## Initialisation methods.
 
-    def __init__(self, width: int, height: int, instance_type: Type, instance_mode: DrawingMode,
-    algorithm_mode: DrawingMode):
+    def __init__(self, width: int, height: int, instance_type: Type, instance_mode: DrawingMode):
         self._width = width
         self._height = height
 
@@ -43,10 +42,10 @@ class Visualisation:
             raise ValueError("Instance type is not supported.")
         self._instance_type = instance_type
 
-        self._init_canvas(instance_mode, algorithm_mode)
+        self._init_canvas(instance_mode)
         self._init_ui()
 
-    def _init_canvas(self, instance_mode: DrawingMode, algorithm_mode: DrawingMode):
+    def _init_canvas(self, instance_mode: DrawingMode):
         self._multi_canvas = MultiCanvas(8, width = self._width, height = self._height)
         for i in range(0, 8):
             self._multi_canvas[i].translate(0, self._height)
@@ -59,13 +58,7 @@ class Visualisation:
             self._multi_canvas[self._INSTANCE_FRONT],
             self._multi_canvas[self._INSTANCE_HIGHLIGHT]
         )
-        self._algorithm_drawer = AlgorithmDrawer(
-            algorithm_mode,
-            self._multi_canvas[self._ALGORITHM_BACK],
-            self._multi_canvas[self._ALGORITHM_MAIN],
-            self._multi_canvas[self._ALGORITHM_FRONT],
-            self._multi_canvas[self._ALGORITHM_HIGHLIGHT]
-        )
+        self._algorithm_drawer = None
 
         self._previous_callback_finish_time = time.time()
         def handle_click_on_canvas(x, y):
@@ -223,7 +216,8 @@ class Visualisation:
         self._clear_time_labels()
 
     def clear_algorithm_output(self):
-        self._algorithm_drawer.clear()
+        if self._algorithm_drawer is not None:
+            self._algorithm_drawer.clear()
 
     def clear_current_instance(self):
         self._current_instance.clear()
@@ -243,7 +237,14 @@ class Visualisation:
             self.add_points(instance_points)
         self._example_buttons.append(self._create_button(name, instance_callback))
 
-    def register_algorithm(self, name: str, algorithm: Callable):
+    def register_algorithm(self, name: str, algorithm: Callable, drawing_mode: DrawingMode):
+        algorithm_drawer = AlgorithmDrawer(
+            drawing_mode,
+            self._multi_canvas[self._ALGORITHM_BACK],
+            self._multi_canvas[self._ALGORITHM_MAIN],
+            self._multi_canvas[self._ALGORITHM_FRONT],
+            self._multi_canvas[self._ALGORITHM_HIGHLIGHT]
+        )
         label_index = len(self._time_labels)
         self._time_labels.append(Label(layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
         def algorithm_callback():
@@ -257,7 +258,7 @@ class Visualisation:
                 return
             end_time = time.time()
             if not self._animation_checkbox.value:
-                self._algorithm_drawer.draw(algorithm_output.points())
+                algorithm_drawer.draw(algorithm_output.points())
             else:
                 self._time_labels[label_index].value = "ANIMATING"
                 animation_time_step = 1.1 - 0.1 * self._animation_speed_slider.value
@@ -265,8 +266,9 @@ class Visualisation:
                     animation_events = algorithm_output.animation_events()
                 else:
                     animation_events = (AppendEvent(point) for point in algorithm_output.points())
-                self._algorithm_drawer.animate(animation_events, animation_time_step)
+                algorithm_drawer.animate(animation_events, animation_time_step)
             self._time_labels[label_index].value = f"{1000 * (end_time - start_time):.3f} ms"
+            self._algorithm_drawer = algorithm_drawer
         self._algorithm_buttons.append(self._create_button(name, algorithm_callback))
 
     def _create_button(self, description: str, callback: Callable, layout: Optional[Layout] = None) -> Button:
