@@ -40,7 +40,7 @@ class InstanceHandle(ABC, Generic[T]):
         return 250
 
     def get_random_coordinate(self, maximum: int) -> float:
-        return np.random.uniform(0, maximum)
+        return np.random.uniform(0.05 * maximum, 0.95 * maximum)
 
 class PointSetInstance(InstanceHandle[set[Point]]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
@@ -56,7 +56,7 @@ class PointSetInstance(InstanceHandle[set[Point]]):
         return True
 
     def get_random_coordinate(self, maximum: int) -> float:
-        return float(np.clip(np.random.normal(0.5 * maximum, 0.15 * maximum), 0, maximum))
+        return float(np.clip(np.random.normal(0.5 * maximum, 0.15 * maximum), 0.05 * maximum, 0.95 * maximum))
 
 class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
