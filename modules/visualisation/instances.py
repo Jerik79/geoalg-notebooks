@@ -28,19 +28,19 @@ class InstanceHandle(ABC, Generic[T]):
 
     def run_algorithm(self, algorithm: Algorithm[T]) -> tuple[GeometricPrimitive, float]:
         start_time = time.time()
-        algorithm_ouput = algorithm(self._instance)
+        algorithm_output = algorithm(self._instance)
         end_time = time.time()
-        return algorithm_ouput, 1000 * (end_time - start_time)
+        return algorithm_output, 1000 * (end_time - start_time)
 
+    @property
     def drawing_mode(self) -> DrawingMode:
         return self._drawing_mode
 
-    def default_random_point_number(self) -> int:       # TODO: Refine this.
+    def default_random_point_number(self) -> int:
         return 250
 
-    @abstractmethod
     def get_random_coordinate(self, maximum: int) -> float:
-        pass
+        return np.random.uniform(0, maximum)
 
 class PointSetInstance(InstanceHandle[set[Point]]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
@@ -76,6 +76,3 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
         self._instance.add(line_segment)
         self._cached_point = None
         return True
-
-    def get_random_coordinate(self, maximum: int) -> float:     # TODO: Maybe change this.
-        return np.random.uniform(0, maximum)
