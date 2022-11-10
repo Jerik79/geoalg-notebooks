@@ -309,8 +309,8 @@ class ChansHullMode(PolygonMode):
                 if isinstance(event, AppendEvent) or (isinstance(event, SetEvent) and event.key == -1):
                     if event.point == self._animation_path[-1]:
                         continue
-                    if isinstance(event.point, PointReference) and event.point.get_container() is not container:
-                        container = event.point.get_container()
+                    if isinstance(event.point, PointReference) and event.point.container is not container:
+                        container = event.point.container
                         with drawer.front_canvas.hold():
                             drawer.front_canvas.clear()
                             drawer.front_canvas.draw_polygon(container)

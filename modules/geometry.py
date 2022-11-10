@@ -31,20 +31,8 @@ class Point(GeometricPrimitive):
         self.x = x
         self.y = y
 
-    def __add__(self, other: Any) -> Point:
-        if not isinstance(other, Point):
-            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
-        return Point(self.x + other.x, self.y + other.y)
-
-    def __sub__(self, other: Any) -> Point:
-        if not isinstance(other, Point):
-            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
-        return Point(self.x - other.x, self.y - other.y)
-
-    def __rmul__(self, other: Any) -> Point:
-        if not isinstance(other, float) and not isinstance(other, int):
-            raise TypeError("Parameter 'other' needs to be of type 'float' or 'int'.")
-        return Point(other * self.x, other * self.y)
+    def points(self) -> Iterator[Point]:
+        yield self
 
     def distance(self, other: Point) -> float:
         return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
@@ -85,30 +73,45 @@ class Point(GeometricPrimitive):
     def __repr__(self) -> str:
         return f"({self.x}, {self.y})"
 
-    def points(self) -> Iterator[Point]:
-        yield self
+    def __add__(self, other: Any) -> Point:
+        if not isinstance(other, Point):
+            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: Any) -> Point:
+        if not isinstance(other, Point):
+            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
+        return Point(self.x - other.x, self.y - other.y)
+
+    def __rmul__(self, other: Any) -> Point:
+        if not isinstance(other, float) and not isinstance(other, int):
+            raise TypeError("Parameter 'other' needs to be of type 'float' or 'int'.")
+        return Point(other * self.x, other * self.y)
 
 class PointReference(Point):
     def __init__(self, container: list[Point], position: int):
         self._container = container
         self._position = position
-        
-    def get_point(self) -> Point:
-        return self._container[self._position]
-    
-    @property
-    def x(self) -> float:
-        return self.get_point().x
-    
-    @property
-    def y(self) -> float:
-        return self.get_point().y
 
-    def get_position(self) -> int:
+    @property
+    def container(self) -> list[Point]:
+        return self._container
+
+    @property
+    def position(self) -> int:
         return self._position
 
-    def get_container(self) -> list[Point]:
-        return self._container
+    @property
+    def point(self) -> Point:
+        return self._container[self._position]
+
+    @property
+    def x(self) -> float:
+        return self.point.x
+
+    @property
+    def y(self) -> float:
+        return self.point.y
 
 
 class LineSegment(GeometricPrimitive):
@@ -121,6 +124,10 @@ class LineSegment(GeometricPrimitive):
         else:
             self.upper = q
             self.lower = p
+
+    def points(self) -> Iterator[Point]:
+        yield self.upper
+        yield self.lower
 
     def intersection(self, other: LineSegment) -> Union[None, Point, LineSegment]:
         self_direction = self.upper - self.lower
@@ -156,10 +163,6 @@ class LineSegment(GeometricPrimitive):
     def __repr__(self) -> str:
         return f"{self.upper}--{self.lower}"
 
-    def points(self) -> Iterator[Point]:
-        yield self.upper
-        yield self.lower
-
 
 from visualisation.drawing import AnimationEvent, AppendEvent, PopEvent, DeleteEvent
 
@@ -170,6 +173,12 @@ class Polygon(GeometricPrimitive):
         self._animation_events: list[AnimationEvent] = []
         for point in points:
             self.append(point)
+
+    def points(self) -> Iterator[Point]:
+        return iter(self._points)
+
+    def animation_events(self) -> Iterator[AnimationEvent]:
+        return iter(self._animation_events)
 
     def append(self, point: Point):
         self._points.append(point)
@@ -186,6 +195,12 @@ class Polygon(GeometricPrimitive):
 
     def __repr__(self) -> str:
         return self._points.__repr__()
+
+    def __add__(self, other: Polygon) -> Polygon:
+        result = Polygon()
+        result._points = self._points + other._points
+        result._animation_events = self._animation_events + other._animation_events
+        return result
 
     def __len__(self) -> int:
         return len(self._points)
@@ -208,23 +223,17 @@ class Polygon(GeometricPrimitive):
         del self._points[key]
         self._animation_events.append(DeleteEvent(key))
 
-    def __add__(self, other: Polygon) -> Polygon:
-        result = Polygon()
-        result._points = self._points + other._points
-        result._animation_events = self._animation_events + other._animation_events
-        return result
-
-    def points(self) -> Iterator[Point]:
-        return iter(self._points)
-
-    def animation_events(self) -> Iterator[AnimationEvent]:
-        return iter(self._animation_events)
-
 
 class Intersections(GeometricPrimitive):
     def __init__(self):
         self._intersections: OrderedDict[Point, set[LineSegment]] = OrderedDict()
         self._animation_events: list[AnimationEvent] = []
+
+    def points(self) -> Iterator[Point]:
+        return iter(self._intersections)
+
+    def animation_events(self) -> Iterator[AnimationEvent]:
+        return iter(self._animation_events)
 
     def add(self, intersection_point: Point, line_segments: Iterable[LineSegment]):
         point_segments = self._intersections.setdefault(intersection_point, set())
@@ -238,9 +247,3 @@ class Intersections(GeometricPrimitive):
 
     def __repr__(self) -> str:
         return "\n".join(f"{point}: {segments}" for point, segments in self._intersections.items())
-
-    def points(self) -> Iterator[Point]:
-        return iter(self._intersections)
-
-    def animation_events(self) -> Iterator[AnimationEvent]:
-        return iter(self._animation_events)

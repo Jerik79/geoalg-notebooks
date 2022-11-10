@@ -1,4 +1,3 @@
-from itertools import chain
 from typing import Callable, Generic, TypeVar, Optional, Iterable
 import time
 
@@ -7,7 +6,7 @@ from .instances import Algorithm, InstanceHandle
 from .drawing import CanvasDrawingHandle, DrawingMode, Drawer
 
 from ipycanvas import MultiCanvas
-from ipywidgets import Output, Button, Label, Checkbox, HBox, VBox, IntSlider, Layout, HTML, dlink, Widget, BoundedIntText
+from ipywidgets import Output, Button, Checkbox, HBox, VBox, IntSlider, Layout, HTML, dlink, Widget, BoundedIntText
 from IPython.display import display, display_html
 
 
@@ -60,12 +59,12 @@ class VisualisationTool(Generic[T]):
             if i != 5:
                 self._multi_canvas[i].line_width = 2
 
-        _ib_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_BACK])
-        _im_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_MAIN])
-        _if_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_FRONT])
-        for canvas in (_ib_canvas, _im_canvas, _if_canvas):
+        ib_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_BACK])
+        im_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_MAIN])
+        if_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_FRONT])
+        for canvas in (ib_canvas, im_canvas, if_canvas):
             canvas.set_colour(255, 165, 0)
-        self._instance_drawer = Drawer(self._instance.drawing_mode, _ib_canvas, _im_canvas, _if_canvas)
+        self._instance_drawer = Drawer(self._instance.drawing_mode, ib_canvas, im_canvas, if_canvas)
 
         self._ab_canvas = CanvasDrawingHandle(self._multi_canvas[self._ALGORITHM_BACK])
         self._am_canvas = CanvasDrawingHandle(self._multi_canvas[self._ALGORITHM_MAIN])
@@ -76,13 +75,13 @@ class VisualisationTool(Generic[T]):
         self._current_algorithm_drawer = None
 
     def _init_ui(self):
-        self._instance_size_label = Label()
+        self._instance_size_label = HTML()
         self._update_instance_size_label()
 
         self._clear_button = self._create_button("Clear", self.clear)
 
         self._random_button_int_text = BoundedIntText(
-            value = self._instance.default_random_point_number(),
+            value = self._instance.default_number_of_random_points,
             min = 1,
             max = 999,
             layout = Layout(width = "55px")
@@ -147,8 +146,8 @@ class VisualisationTool(Generic[T]):
         return (
             self._clear_button,
             self._random_button_int_text, self._random_button,
-            *self._example_buttons, *self._algorithm_buttons,
-            self._animation_checkbox, self._animation_speed_slider
+            self._animation_checkbox, self._animation_speed_slider,
+            *self._example_buttons, *self._algorithm_buttons
         )
 
 
@@ -232,11 +231,11 @@ class VisualisationTool(Generic[T]):
             label.value = "<br>"
 
     def register_example_instance(self, name: str, instance: T):
-        instance_points = list(chain.from_iterable(element.points() for element in instance))       # TODO: Check this.
-        def instance_callback():
+        example_instance_points = self._instance.extract_points_from_raw_instance(instance)
+        def example_instance_callback():
             self.clear()
-            self.add_points(instance_points)
-        self._example_buttons.append(self._create_button(name, instance_callback))
+            self.add_points(example_instance_points)
+        self._example_buttons.append(self._create_button(name, example_instance_callback))
 
     def register_algorithm(self, name: str, algorithm: Algorithm[T], drawing_mode: DrawingMode):
         algorithm_drawer = Drawer(drawing_mode, self._ab_canvas, self._am_canvas, self._af_canvas)
