@@ -73,7 +73,8 @@ class CanvasDrawingHandle:
     def draw_point_outline(self, point: Point, radius: int = DEFAULT_POINT_RADIUS):
         self._canvas.stroke_circle(point.x, point.y, radius)
 
-    def draw_path(self, points: Iterable[Point], close: bool = False, stroke: bool = True, fill: bool = False, transparent: bool = False):
+    def draw_path(self, points: Iterable[Point], close: bool = False, stroke: bool = True,
+    fill: bool = False, transparent: bool = False):
         points_iterator = iter(points)
         first_point = next(points_iterator, None)
         if first_point is None:
@@ -97,8 +98,9 @@ class CanvasDrawingHandle:
             self._canvas.stroke_style = self.opaque_style
             self._canvas.fill_style  = self.opaque_style
 
-    def draw_polygon(self, points: Iterable[Point], stroke: bool = True, fill: bool = False, transparent: bool = False):
-        self.draw_path(points, True, stroke, fill, transparent)
+    def draw_polygon(self, points: Iterable[Point], stroke: bool = True,
+    fill: bool = False, transparent: bool = False):
+        self.draw_path(points, close = True, stroke = stroke, fill = fill, transparent = transparent)
 
     @property
     def width(self) -> float:
@@ -110,9 +112,9 @@ class Drawer:
     main_canvas: CanvasDrawingHandle, front_canvas: CanvasDrawingHandle):
         self._drawing_mode = drawing_mode
         self._drawing_mode_state = None
-        self._back_canvas = back_canvas
-        self._main_canvas = main_canvas
-        self._front_canvas = front_canvas
+        self.back_canvas = back_canvas
+        self.main_canvas = main_canvas
+        self.front_canvas = front_canvas
 
     def _get_drawing_mode_state(self, default: Any = None) -> Any:
         if self._drawing_mode_state is None:
@@ -124,9 +126,9 @@ class Drawer:
 
     def clear(self):
         self._drawing_mode_state = None
-        self._back_canvas.clear()
-        self._main_canvas.clear()
-        self._front_canvas.clear()
+        self.back_canvas.clear()
+        self.main_canvas.clear()
+        self.front_canvas.clear()
 
     def draw(self, points: Iterable[Point]):
         self._drawing_mode.draw(self, points)
@@ -144,63 +146,20 @@ class DrawingMode(ABC):
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
         pass
 
+
 class PointsMode(DrawingMode):
     def draw(self, drawer: Drawer, points: Iterable[Point]):
-        with drawer._main_canvas.hold():
+        with drawer.main_canvas.hold():
             for point in points:
-                drawer._main_canvas.draw_point(point)
+                drawer.main_canvas.draw_point(point)
 
     def _draw_animation_step(self, drawer: Drawer, points: list[Point]):
-        with drawer._main_canvas.hold(), drawer._back_canvas.hold():
-            drawer._main_canvas.clear()
-            drawer._back_canvas.clear()
+        with drawer.main_canvas.hold():
+            drawer.main_canvas.clear()
             if points:
                 for point in points[:-1]:
-                    drawer._main_canvas.draw_point(point)
-                drawer._main_canvas.draw_point(points[-1], radius = 12, transparent = True)
-
-    def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
-        drawer.clear()
-
-        points: list[Point] = []
-
-        event_iterator = iter(animation_events)
-        next_event = next(event_iterator, None)
-
-        while next_event is not None:
-            event = next_event
-            next_event = next(event_iterator, None)
-
-            if points:
-                if isinstance(event, PopEvent) and isinstance(next_event, AppendEvent):
-                    event = SetEvent(-1, next_event.point)
-                if isinstance(event, AppendEvent) or (isinstance(event, SetEvent) and event.key == -1):
-                    if event.point == points[-1]:
-                        continue
-
-            event.execute_on(points)
-            self._draw_animation_step(drawer, points)
-            time.sleep(animation_time_step)
-
-        drawer.clear()
-        self.draw(drawer, points)
-
-class SweepLineMode(DrawingMode):       # TODO: Avoid code duplication, if possible.
-    def draw(self, drawer: Drawer, points: Iterable[Point]):
-        with drawer._main_canvas.hold():
-            for point in points:
-                drawer._main_canvas.draw_point(point)
-
-    def _draw_animation_step(self, drawer: Drawer, points: list[Point]):
-        with drawer._main_canvas.hold(), drawer._back_canvas.hold():
-            drawer._main_canvas.clear()
-            drawer._back_canvas.clear()
-            drawer._front_canvas.clear()
-            if points:
-                for point in points[:-1]:
-                    drawer._main_canvas.draw_point(point)
-                drawer._main_canvas.draw_point(points[-1], radius = 12, transparent = True)
-                drawer._front_canvas.draw_path((Point(0, points[-1].y), Point(drawer._front_canvas.width, points[-1].y)))
+                    drawer.main_canvas.draw_point(point)
+                drawer.main_canvas.draw_point(points[-1], radius = 12, transparent = True)
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
         drawer.clear()
@@ -230,6 +189,20 @@ class SweepLineMode(DrawingMode):       # TODO: Avoid code duplication, if possi
         drawer.clear()
         self.draw(drawer, points)
 
+class SweepLineMode(PointsMode):
+    def _draw_animation_step(self, drawer: Drawer, points: list[Point]):
+        with drawer.main_canvas.hold(), drawer.front_canvas.hold():
+            drawer.main_canvas.clear()
+            drawer.front_canvas.clear()
+            if points:
+                for point in points[:-1]:
+                    drawer.main_canvas.draw_point(point)
+                drawer.main_canvas.draw_point(points[-1], radius = 12, transparent = True)
+                left_sweep_line_point = Point(0, points[-1].y)
+                right_sweep_line_point = Point(drawer.front_canvas.width, points[-1].y)
+                drawer.front_canvas.draw_path((left_sweep_line_point, right_sweep_line_point))
+
+
 class PathMode(DrawingMode):
     def __init__(self, draw_vertices: bool):
         self._draw_vertices = draw_vertices
@@ -244,25 +217,24 @@ class PathMode(DrawingMode):
         if path:
             drawer._set_drawing_mode_state(path[-1])
 
-        with drawer._main_canvas.hold():
+        with drawer.main_canvas.hold():
             if self._draw_vertices:
                 for point in path:
-                    drawer._main_canvas.draw_point(point)
-            drawer._main_canvas.draw_path(path)
+                    drawer.main_canvas.draw_point(point)
+            drawer.main_canvas.draw_path(path)
 
     def _draw_animation_step(self, drawer: Drawer):
-        with drawer._main_canvas.hold():
-            drawer._main_canvas.clear()
+        with drawer.main_canvas.hold():
+            drawer.main_canvas.clear()
             if self._draw_vertices and self._animation_path:
-                drawer._main_canvas.draw_point(self._animation_path[-1], radius = 12, transparent = True)
-                for point in self._animation_path:
-                    drawer._main_canvas.draw_point(point)
-            drawer._main_canvas.draw_path(self._animation_path)
+                for point in self._animation_path[:-1]:
+                    drawer.main_canvas.draw_point(point)
+                drawer.main_canvas.draw_point(self._animation_path[-1], radius = 12, transparent = True)
+            drawer.main_canvas.draw_path(self._animation_path[:-1])
+            drawer.main_canvas.draw_path(self._animation_path[-2:], transparent = True)
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
         drawer.clear()
-
-        container: Optional[list[Point]] = None
 
         event_iterator = iter(animation_events)
         next_event = next(event_iterator, None)
@@ -277,12 +249,6 @@ class PathMode(DrawingMode):
                 if isinstance(event, AppendEvent) or (isinstance(event, SetEvent) and event.key == -1):
                     if event.point == self._animation_path[-1]:
                         continue
-                    if isinstance(event.point, PointReference) and event.point.get_container() is not container:
-                        container = event.point.get_container()
-                        with drawer._front_canvas.hold():
-                            drawer._front_canvas.clear()
-                            drawer._front_canvas.draw_polygon(container)     # TODO: Maybe make this configurable.
-                        time.sleep(animation_time_step)
 
             event.execute_on(self._animation_path)
             self._draw_animation_step(drawer)
@@ -301,23 +267,63 @@ class PolygonMode(PathMode):
         polygon = drawer._get_drawing_mode_state(default = [])
         polygon.extend(points)
 
-        drawer._main_canvas.clear()
+        drawer.main_canvas.clear()
         if self._draw_interior:
-            drawer._back_canvas.clear()
+            drawer.back_canvas.clear()
 
-        with drawer._main_canvas.hold(), drawer._back_canvas.hold():
+        with drawer.main_canvas.hold(), drawer.back_canvas.hold():
             if self._draw_vertices:
                 for point in polygon:
-                    drawer._main_canvas.draw_point(point)
-            drawer._main_canvas.draw_polygon(polygon)
+                    drawer.main_canvas.draw_point(point)
+            drawer.main_canvas.draw_polygon(polygon)
             if self._draw_interior:
-                drawer._back_canvas.draw_polygon(polygon, stroke = False, fill = True, transparent = True)
+                drawer.back_canvas.draw_polygon(polygon, stroke = False, fill = True, transparent = True)
+
+    def _polygon_event_iterator(self, animation_events: Iterable[AnimationEvent]) -> Iterator[AnimationEvent]:
+        yield from animation_events
+        yield AppendEvent(self._animation_path[0])
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
-        def polygon_event_iterator() -> Iterator[AnimationEvent]:
-            yield from animation_events
-            yield AppendEvent(self._animation_path[0])
-        super().animate(drawer, polygon_event_iterator(), animation_time_step)
+        super().animate(drawer, self._polygon_event_iterator(animation_events), animation_time_step)
+
+class ChansHullMode(PolygonMode):
+    @classmethod
+    def from_polygon_mode(cls, polygon_mode: PolygonMode) -> ChansHullMode:
+        return cls(polygon_mode._draw_vertices, polygon_mode._draw_interior)
+
+    def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
+        drawer.clear()
+
+        container: Optional[list[Point]] = None
+
+        event_iterator = self._polygon_event_iterator(animation_events)
+        next_event = next(event_iterator, None)
+
+        while next_event is not None:
+            event = next_event
+            next_event = next(event_iterator, None)
+
+            if self._animation_path:
+                if isinstance(event, PopEvent) and isinstance(next_event, AppendEvent):
+                    event = SetEvent(-1, next_event.point)
+                if isinstance(event, AppendEvent) or (isinstance(event, SetEvent) and event.key == -1):
+                    if event.point == self._animation_path[-1]:
+                        continue
+                    if isinstance(event.point, PointReference) and event.point.get_container() is not container:
+                        container = event.point.get_container()
+                        with drawer.front_canvas.hold():
+                            drawer.front_canvas.clear()
+                            drawer.front_canvas.draw_polygon(container)
+                        time.sleep(animation_time_step)
+
+            event.execute_on(self._animation_path)
+            self._draw_animation_step(drawer)
+            time.sleep(animation_time_step)
+
+        drawer.clear()
+        self.draw(drawer, self._animation_path)
+        self._animation_path.clear()
+
 
 class FixedVertexNumberPathsMode(DrawingMode):
     def __init__(self, vertex_number: int, draw_vertices: bool):
@@ -326,30 +332,30 @@ class FixedVertexNumberPathsMode(DrawingMode):
         self._vertex_number = vertex_number
         self._draw_vertices = draw_vertices
 
-    def draw(self, drawer: Drawer, points: Iterable[Point]):
+    def draw(self, drawer: Drawer, points: Iterable[Point]):      # TODO: Maybe implement this differently.
         path = drawer._get_drawing_mode_state(default = [])
 
-        with drawer._main_canvas.hold():
+        with drawer.main_canvas.hold():
             for point in points:
                 if self._draw_vertices:
-                    drawer._main_canvas.draw_point(point, transparent = True)
+                    drawer.main_canvas.draw_point(point, transparent = True)
                 path.append(point)
-                drawer._main_canvas.draw_path(path[-2:], transparent = True)
+                drawer.main_canvas.draw_path(path[-2:], transparent = True)
                 if len(path) == self._vertex_number:
                     for path_point in path:
-                        drawer._main_canvas.draw_point(path_point)
-                    drawer._main_canvas.draw_path(path)
+                        drawer.main_canvas.draw_point(path_point)
+                    drawer.main_canvas.draw_path(path)
                     path.clear()
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):   # TODO: Implement this.
         pass
 
-class FixedVertexNumberPolygonsMode(FixedVertexNumberPathsMode):        # TODO: Implement this.
-    pass
-
 class LineSegmentsMode(FixedVertexNumberPathsMode):
     def __init__(self, draw_vertices: bool):
         super().__init__(2, draw_vertices)
+
+class FixedVertexNumberPolygonsMode(FixedVertexNumberPathsMode):        # TODO: Implement this.
+    pass
 
 class TrianglesMode(FixedVertexNumberPolygonsMode):
     def __init__(self, draw_vertices: bool):
