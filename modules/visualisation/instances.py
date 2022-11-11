@@ -77,6 +77,8 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
         if self._cached_point is None:
             self._cached_point = point
             return True
+        elif self._cached_point == point:
+            return False
         line_segment = LineSegment(self._cached_point, point)
         if line_segment in self._instance:
             return False
