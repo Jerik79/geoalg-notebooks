@@ -57,7 +57,7 @@ class VisualisationTool(Generic[T]):
             self._multi_canvas[i].translate(0, self._height)
             self._multi_canvas[i].scale(1, -1)
             if i != 5:
-                self._multi_canvas[i].line_width = 2
+                self._multi_canvas[i].line_width = 3        # TODO: This could be a parameter of CanvasDrawingHandle.draw_path(...).
 
         ib_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_BACK])
         im_canvas = CanvasDrawingHandle(self._multi_canvas[self._INSTANCE_MAIN])
@@ -88,12 +88,10 @@ class VisualisationTool(Generic[T]):
         )
         def random_button_callback():
             self.clear()
-            self.add_points([
-                Point(
-                    self._instance.get_random_coordinate(self._width),
-                    self._instance.get_random_coordinate(self._height)
-                ) for _ in range(self._random_button_int_text.value)
-            ])
+            self.add_points(
+                self._instance.get_random_point(self._width, self._height)
+                for _ in range(self._random_button_int_text.value)
+            )
         self._random_button = self._create_button(
             "Random",
             random_button_callback,
@@ -206,8 +204,8 @@ class VisualisationTool(Generic[T]):
         self._update_instance_size_label()
 
     def _update_instance_size_label(self):
-        label_value = f"Instance size: {len(self._instance):0>3}"
-        if self._number_of_points != len(self._instance):
+        label_value = f"Instance size: {self._instance.size():0>3}"
+        if self._number_of_points != self._instance.size():
             label_value += f" (Number of points: {self._number_of_points:0>3})"
         self._instance_size_label.value = label_value
 
