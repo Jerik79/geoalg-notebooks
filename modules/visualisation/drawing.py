@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Iterator, Optional
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from itertools import islice
 import time
 
 from geometry import Point, PointReference
@@ -220,7 +221,7 @@ class PathMode(DrawingMode):
 
     def draw(self, drawer: Drawer, points: Iterable[Point]):
         path = []
-        previous_vertex = drawer._get_drawing_mode_state()
+        previous_vertex: Optional[Point] = drawer._get_drawing_mode_state()
         if previous_vertex is not None:
             path.append(previous_vertex)
         path.extend(points)
@@ -275,7 +276,7 @@ class PolygonMode(PathMode):
         self._draw_interior = draw_interior
 
     def draw(self, drawer: Drawer, points: Iterable[Point]):
-        polygon = drawer._get_drawing_mode_state(default = [])
+        polygon: list[Point] = drawer._get_drawing_mode_state(default = [])
         polygon.extend(points)
 
         drawer.main_canvas.clear()
@@ -347,21 +348,32 @@ class FixedVertexNumberPathsMode(DrawingMode):
         self._vertex_number = vertex_number
         self._vertex_radius = vertex_radius
 
-    def draw(self, drawer: Drawer, points: Iterable[Point]):      # TODO: Maybe implement this differently.
-        path = drawer._get_drawing_mode_state(default = [])
+    def draw(self, drawer: Drawer, points: Iterable[Point]):
+        vertex_queue: list[Point] = drawer._get_drawing_mode_state(default = [])
+        initial_queue_length = len(vertex_queue)
+        vertex_queue.extend(points)
 
         with drawer.main_canvas.hold():
-            for point in points:
+            i, j = 0, self._vertex_number
+            while j <= len(vertex_queue):
+                path = vertex_queue[i:j]
                 if self._vertex_radius > 0:
-                    drawer.main_canvas.draw_point(point, self._vertex_radius, transparent = True)
-                path.append(point)
-                drawer.main_canvas.draw_path(path[-2:], transparent = True)
-                if len(path) == self._vertex_number:
-                    if self._vertex_radius > 0:
-                        for vertex in path:
-                            drawer.main_canvas.draw_point(vertex, self._vertex_radius)
-                    drawer.main_canvas.draw_path(path)
-                    path.clear()
+                    for vertex in path:
+                        drawer.main_canvas.draw_point(vertex, self._vertex_radius)
+                drawer.main_canvas.draw_path(path)
+                i, j = j, j + self._vertex_number
+
+            if i == 0:
+                offset = int(initial_queue_length != 0)
+                subpath = vertex_queue[initial_queue_length - offset:]
+            else:
+                offset = 0
+                subpath = vertex_queue[i:]
+                drawer._set_drawing_mode_state(subpath)
+            if self._vertex_radius > 0:
+                for vertex in islice(subpath, offset, None):
+                    drawer.main_canvas.draw_point(vertex, self._vertex_radius, transparent = True)
+            drawer.main_canvas.draw_path(subpath, transparent = True)
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):   # TODO: Implement this.
         pass
