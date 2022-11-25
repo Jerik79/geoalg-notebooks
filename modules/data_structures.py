@@ -59,9 +59,6 @@ class BinaryTree(Generic[K]):
     def search_successor(self, item: Any) -> Optional[K]:
         return self._root.search_successor(item, self._comparator)
 
-    def __repr__(self) -> str:            # TODO: Remove this.
-        return self._root.__repr__()
-
 # TODO: The values should be utilised more. There isn't even a get_value(key) method right now.
 class BinaryTreeDict(Generic[K, V]):
     def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
@@ -91,9 +88,6 @@ class BinaryTreeDict(Generic[K, V]):
 
     def search_predecessor(self, item: Any) -> Optional[K]:
         return self._root.search_successor(item, self._comparator)
-
-    def __repr__(self) -> str:            # TODO: Remove this.
-        return self._root.__repr__()
 
 class Node(Generic[K, V]):
     def __init__(self, key: Optional[K], value: Optional[V], level: int,
@@ -147,7 +141,7 @@ class Node(Generic[K, V]):
     def _skew(self):
         if self.is_empty() or self._left.is_empty():
             return
-        
+
         if self._left._level == self._level:
             self._right = Node(self._key, self._value, self._level, self._left._right, self._right)
             self._key = self._left._key
@@ -174,7 +168,7 @@ class Node(Generic[K, V]):
             self._level = level
             if level < self._right._level:
                 self._right._level = level
-        
+
         self._skew()
         self._right._skew()
         if not self._right.is_empty():
@@ -186,7 +180,7 @@ class Node(Generic[K, V]):
         if self.is_empty():
             self._make_leaf(key, value)
             return False
-        
+
         cr = comparator.compare(key, self._key)
         if cr is ComparisonResult.BEFORE:
             was_key_present = self._left.insert(key, value, comparator)
@@ -204,7 +198,7 @@ class Node(Generic[K, V]):
         if self.is_empty():
             self._make_leaf(key, value_updater(None))
             return False
-        
+
         cr = comparator.compare(key, self._key)
         if cr is ComparisonResult.BEFORE:
             was_key_present = self._left.update(key, value_updater, comparator)
@@ -222,7 +216,7 @@ class Node(Generic[K, V]):
     def delete(self, key: K, comparator: Comparator[K]) -> tuple[bool, Optional[V]]:
         if self.is_empty():
             return False, None
-        
+
         cr = comparator.compare(key, self._key)
         if cr is ComparisonResult.BEFORE:
             was_key_present, value = self._left.delete(key, comparator)
@@ -236,7 +230,7 @@ class Node(Generic[K, V]):
                 self._replace_with_predecessor(comparator)
             else:
                 self._replace_with_successor(comparator)
-        
+
         if was_key_present:
             self._adjust_after_deletion()
         return was_key_present, value
@@ -254,7 +248,7 @@ class Node(Generic[K, V]):
                 self._make_empty()
             else:
                 self._replace_with_successor(comparator)
-        
+
         self._adjust_after_deletion()
         return key, value
 
@@ -291,13 +285,3 @@ class Node(Generic[K, V]):
             return self._left.search_successor(item, comparator, self._key)
         else:
             return self._right.search_successor(item, comparator, candidate)
-
-    def __repr__(self) -> str:      # TODO: Remove this.
-        if self.is_empty():
-            return ", "
-        if self._value:
-            return f"{self._key}/{self._value} <{self._left.__repr__()}> <{self._right.__repr__()}>"
-            #return f"{self.left.__repr__()}{self.key}:{self.value}{self.right.__repr__()}"
-        else:
-            return f"{self._key} <{self._left.__repr__()}> <{self._right.__repr__()}>"
-            #return f"{self.left.__repr__()}{self.key}{self.right.__repr__()}"

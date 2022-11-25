@@ -1,12 +1,22 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Iterable, Iterator, Union, Any
+from typing import Iterable, Iterator, Optional, Union, Any
 from enum import Enum, auto
 from collections import OrderedDict
 import math
 
 
-EPSILON = 1e-10         # This seems to be a good value for our standard coordinate range (0 to 400).
+EPSILON: float = 1e-9      # This seems to be a good value, at least for our standard coordinate range (0 to 400).
+
+def set_epsilon(epsilon: float):
+    if not math.isfinite(epsilon) or epsilon < 0.0:
+        return ValueError("The epsilon value must be a finite positive number.")
+    global EPSILON
+    EPSILON = epsilon
+
+def reset_epsilon():
+    global EPSILON
+    EPSILON = 1e-9
 
 
 class Orientation(Enum):
@@ -49,7 +59,7 @@ class Point(GeometricPrimitive):
         direction = target - source
         offset = self - source
         cross = offset.cross(direction)
-        if abs(cross) < EPSILON:
+        if abs(cross) <= EPSILON:
             t = offset.dot(direction) / direction.dot(direction)
             if t < 0.0:
                 return Orientation.BEHIND_SOURCE
@@ -88,6 +98,9 @@ class Point(GeometricPrimitive):
             raise TypeError("Parameter 'other' needs to be of type 'float' or 'int'.")
         return Point(other * self.x, other * self.y)
 
+    def __round__(self, ndigits: Optional[int] = None) -> Point:
+        return Point(round(self.x, ndigits), round(self.y, ndigits))
+
 class PointReference(Point):
     def __init__(self, container: list[Point], position: int):
         self._container = container
@@ -117,7 +130,7 @@ class PointReference(Point):
 class LineSegment(GeometricPrimitive):
     def __init__(self, p: Point, q: Point):
         if p == q:
-            raise ValueError("LineSegment needs two different endpoints.")
+            raise ValueError("A line segment needs two different endpoints.")
         if p.y > q.y or (p.y == q.y and p.x < q.x):
             self.upper = p
             self.lower = q
@@ -135,12 +148,12 @@ class LineSegment(GeometricPrimitive):
         directions_cross = self_direction.cross(other_direction)
         offset = other.lower - self.lower
 
-        if abs(directions_cross) >= EPSILON:
+        if abs(directions_cross) > EPSILON:
             t = offset.cross(other_direction) / directions_cross
             u = offset.cross(self_direction) / directions_cross
-            if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+            if -EPSILON <= t <= 1.0 + EPSILON and -EPSILON <= u <= 1.0 + EPSILON:
                 return self.lower + t * self_direction
-        elif abs(offset.cross(self_direction)) < EPSILON:
+        elif abs(offset.cross(self_direction)) <= EPSILON:
             self_direction_dot = self_direction.dot(self_direction)
             t0 = offset.dot(self_direction) / self_direction_dot
             t1 = t0 + other_direction.dot(self_direction) / self_direction_dot
@@ -196,7 +209,9 @@ class Polygon(GeometricPrimitive):
     def __repr__(self) -> str:
         return self._points.__repr__()
 
-    def __add__(self, other: Polygon) -> Polygon:
+    def __add__(self, other: Any) -> Polygon:
+        if not isinstance(other, Polygon):
+            raise TypeError("Parameter 'other' needs to be of type 'Polygon'.")
         result = Polygon()
         result._points = self._points + other._points
         result._animation_events = self._animation_events + other._animation_events
@@ -205,21 +220,22 @@ class Polygon(GeometricPrimitive):
     def __len__(self) -> int:
         return len(self._points)
 
-    def __getitem__(self, key) -> Union[Point, Polygon]:
-        # This implementation is a hack, but it works for Graham Scan.
-        if isinstance(key, slice):
-            if key.step is not None and key.step != 1:
-                raise ValueError("Polygon doesn't accept slice keys with a step different from 1.")
+    def __getitem__(self, key: Any) -> Union[Point, Polygon]:
+        if isinstance(key, int):
+            return self._points[key]
+        elif isinstance(key, slice) and (key.step is None or key.step == 1):
+            # This implementation is a hack, but it works for Graham Scan.
             result = Polygon()
             result._points = self._points[key]
             result._animation_events = self._animation_events[:]
             return result
-        return self._points[key]
+        else:
+            raise ValueError("Parameter 'key' needs to be an integer or a slice with step 1.")
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Any):
         if not isinstance(key, int) or key >= 0:
             # This constraint enables an easy implementation of __add__(). TODO: Can probably be changed now.
-            raise ValueError("Polygon only accepts a negative integer as a deletion key.")
+            raise ValueError("Parameter 'key' needs to be a negative integer.")
         del self._points[key]
         self._animation_events.append(DeleteEvent(key))
 
@@ -236,10 +252,11 @@ class Intersections(GeometricPrimitive):
         return iter(self._animation_events)
 
     def add(self, intersection_point: Point, line_segments: Iterable[LineSegment]):
-        point_segments = self._intersections.setdefault(intersection_point, set())
-        for line_segment in line_segments:
-            point_segments.add(line_segment)
-        self._animation_events.append(AppendEvent(intersection_point))
+        rounded_point = round(intersection_point, 5)
+        containing_segments: set[LineSegment] = self._intersections.setdefault(rounded_point, set())
+        if not containing_segments:
+            self._animation_events.append(AppendEvent(rounded_point))
+        containing_segments.update(line_segments)
 
     def animate(self, point: Point):
         self._animation_events.append(AppendEvent(point))
