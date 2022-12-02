@@ -35,7 +35,7 @@ class DefaultComparator(Generic[K]):
 # TODO: More methods like contains(key) and pop_last() could be implemented.
 class BinaryTree(Generic[K]):
     def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
-        self._root: Node[K, None] = Node.empty_node()
+        self._root: Node[K, None] = Node()
         self._comparator = comparator
 
     def is_empty(self) -> bool:
@@ -47,7 +47,10 @@ class BinaryTree(Generic[K]):
     def delete(self, key: K) -> bool:
         return self._root.delete(key, self._comparator)[0]
 
-    def pop_first(self) -> K:
+    def pop_first(self) -> Optional[K]:
+        if self._root.is_empty():
+            return None
+
         return self._root.pop_first(self._comparator)[0]
 
     def search_matching(self, item: Any) -> list[K]:
@@ -62,7 +65,7 @@ class BinaryTree(Generic[K]):
 # TODO: The values should be utilised more. There isn't even a get_value(key) method right now.
 class BinaryTreeDict(Generic[K, V]):
     def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
-        self._root: Node[K, V] = Node.empty_node()
+        self._root: Node[K, V] = Node()
         self._comparator = comparator
 
     def is_empty(self) -> bool:
@@ -77,7 +80,10 @@ class BinaryTreeDict(Generic[K, V]):
     def delete(self, key: K) -> tuple[bool, Optional[V]]:
         return self._root.delete(key, self._comparator)
 
-    def pop_first(self) -> tuple[K, V]:
+    def pop_first(self) -> Optional[tuple[K, V]]:
+        if self._root.is_empty():
+            return None
+
         return self._root.pop_first(self._comparator)
 
     def search_matching(self, item: Any) -> list[K]:
@@ -90,17 +96,8 @@ class BinaryTreeDict(Generic[K, V]):
         return self._root.search_successor(item, self._comparator)
 
 class Node(Generic[K, V]):
-    def __init__(self, key: Optional[K], value: Optional[V], level: int,
-    left: Optional[Node[K, V]], right: Optional[Node[K, V]]):
-        self._key = key
-        self._value = value
-        self._level = level
-        self._left = left
-        self._right = right
-
-    @classmethod
-    def empty_node(cls) -> Node:
-        return cls(None, None, 0, None, None)
+    def __init__(self):
+        self._make_empty()
 
     def _make_empty(self):
         self._key = None
@@ -116,11 +113,45 @@ class Node(Generic[K, V]):
         self._key = key
         self._value = value
         self._level = 1
-        self._left = Node.empty_node()
-        self._right = Node.empty_node()
+        self._left = Node()
+        self._right = Node()
 
     def _is_leaf(self) -> bool:
-        return self._level == 1 and self._left.is_empty() and self._right.is_empty()
+        return self._level == 1 and self._right.is_empty()
+
+    def _skew(self):
+        if not self.is_empty() and self._left._level == self._level:
+            self._key, self._left._key = self._left._key, self._key
+            self._value, self._left._value = self._left._value, self._value
+
+            self._left, self._right = self._right, self._left
+            self._left, self._right._left = self._right._left, self._left
+            self._right._left, self._right._right = self._right._right, self._right._left
+
+    def _split(self):
+        if not self.is_empty() and not self._right.is_empty() and self._right._right._level == self._level:
+            self._key, self._right._key = self._right._key, self._key
+            self._value, self._right._value = self._right._value, self._value
+            self._level += 1
+
+            self._left, self._right = self._right, self._left
+            self._right, self._left._right = self._left._right, self._right
+            self._left._left, self._left._right = self._left._right, self._left._left
+
+    def _adjust_after_deletion(self):
+        if not self.is_empty():
+            level = min(self._left._level, self._right._level) + 1
+            if level < self._level:
+                self._level = level
+                if level < self._right._level:
+                    self._right._level = level
+
+            self._skew()
+            self._right._skew()
+            if not self._right.is_empty():
+                self._right._right._skew()
+            self._split()
+            self._right._split()
 
     def _replace_with_predecessor(self, comparator: Comparator[K]):
         predecessor = self._left
@@ -138,44 +169,6 @@ class Node(Generic[K, V]):
         self._value = successor._value
         self._right.delete(successor._key, comparator)
 
-    def _skew(self):
-        if self.is_empty() or self._left.is_empty():
-            return
-
-        if self._left._level == self._level:
-            self._right = Node(self._key, self._value, self._level, self._left._right, self._right)
-            self._key = self._left._key
-            self._value = self._left._value
-            self._left = self._left._left
-
-    def _split(self):
-        if self.is_empty() or self._right.is_empty() or self._right._right.is_empty():
-            return
-
-        if self._right._right._level == self._level:
-            self._left = Node(self._key, self._value, self._level, self._left, self._right._left)
-            self._key = self._right._key
-            self._value = self._right._value
-            self._level = self._right._level + 1
-            self._right = self._right._right
-
-    def _adjust_after_deletion(self):
-        if self.is_empty():
-            return
-
-        level = min(self._left._level, self._right._level) + 1
-        if level < self._level:
-            self._level = level
-            if level < self._right._level:
-                self._right._level = level
-
-        self._skew()
-        self._right._skew()
-        if not self._right.is_empty():
-            self._right._right._skew()
-        self._split()
-        self._right._split()
-
     def insert(self, key: K, value: V, comparator: Comparator[K]) -> bool:
         if self.is_empty():
             self._make_leaf(key, value)
@@ -192,6 +185,7 @@ class Node(Generic[K, V]):
         if not was_key_present:
             self._skew()
             self._split()
+
         return was_key_present
 
     def update(self, key: K, value_updater: Updater[V], comparator: Comparator[K]) -> bool:
@@ -211,6 +205,7 @@ class Node(Generic[K, V]):
         if not was_key_present:
             self._skew()
             self._split()
+
         return was_key_present
 
     def delete(self, key: K, comparator: Comparator[K]) -> tuple[bool, Optional[V]]:
@@ -224,32 +219,30 @@ class Node(Generic[K, V]):
             was_key_present, value = self._right.delete(key, comparator)
         else:
             was_key_present, value = True, self._value
-            if self._is_leaf():
-                self._make_empty()
-            elif not self._left.is_empty():
+            if not self._left.is_empty():
                 self._replace_with_predecessor(comparator)
-            else:
+            elif not self._right.is_empty():
                 self._replace_with_successor(comparator)
+            else:
+                self._make_empty()
 
         if was_key_present:
             self._adjust_after_deletion()
+
         return was_key_present, value
 
-    def pop_first(self, comparator: Comparator[K]) -> Optional[tuple[K, V]]:
-        if self.is_empty():
-            return None
-
+    def pop_first(self, comparator: Comparator[K]) -> tuple[K, V]:
         if not self._left.is_empty():
             key, value = self._left.pop_first(comparator)
         else:
-            key = self._key
-            value = self._value
-            if self._is_leaf():
-                self._make_empty()
-            else:
+            key, value = self._key, self._value
+            if not self._right.is_empty():
                 self._replace_with_successor(comparator)
+            else:
+                self._make_empty()
 
         self._adjust_after_deletion()
+
         return key, value
 
     def search_matching(self, item: Any, comparator: Comparator[K]) -> Iterator[K]:
