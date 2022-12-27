@@ -3,8 +3,8 @@ from typing import Callable, Generic, Optional, TypeVar
 from itertools import chain
 import time
 
-from geometry import GeometricPrimitive, Point, LineSegment
-from .drawing import DrawingMode, LineSegmentsMode, PointsMode
+from geometry import GeometricPrimitive, Point, LineSegment, DoublyConnectedPolygon
+from .drawing import DrawingMode, PointsMode, LineSegmentsMode, PolygonMode
 
 import numpy as np
 
@@ -134,3 +134,34 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
         y = float(np.clip(np.random.normal(self._cached_random_point.y, scale * max_y), 0.05 * max_y, 0.95 * max_y))
         self._cached_random_point = None
         return Point(x, y)
+
+
+class SimplePolygonInstance(InstanceHandle[DoublyConnectedPolygon]):
+    def __init__(self, drawing_mode: Optional[DrawingMode] = None):
+        if drawing_mode is None:
+            drawing_mode = PolygonMode(draw_interior = False)
+        super().__init__(DoublyConnectedPolygon(), drawing_mode)
+
+    def run_algorithm(self, algorithm: Algorithm[T]) -> tuple[GeometricPrimitive, float]:
+        self._instance.close()      # TODO: This is inconvenient...
+        return super().run_algorithm(algorithm)
+
+    def add_point(self, point: Point) -> bool:      # TODO: check simplicity...
+        self._instance.add_vertex(point)
+        return True
+
+    def clear(self):
+        self._instance.clear()
+
+    def size(self) -> int:
+        return len(self._instance)
+
+    @staticmethod
+    def extract_points_from_raw_instance(instance: DoublyConnectedPolygon) -> list[Point]:
+        return list(vertex._point for vertex in instance._vertices())
+
+    @property
+    def default_number_of_random_points(self) -> int:
+        return 25
+
+    # TODO: Implement get_random_point().

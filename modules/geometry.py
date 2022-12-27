@@ -264,3 +264,160 @@ class Intersections(GeometricPrimitive):
 
     def __repr__(self) -> str:
         return "\n".join(f"{point}: {segments}" for point, segments in self._intersections.items())
+
+
+class DoublyConnectedPolygon(GeometricPrimitive):
+    def __init__(self):
+        self.clear()
+
+    def clear(self):
+        self._is_closed: bool = False
+        self._root_vertex: Optional[Vertex] = None
+        self._previous_vertex: Optional[Vertex] = None
+        self._number_of_vertices: int = 0
+
+    def _vertices(self) -> Iterator[Vertex]:    # TODO: This loops infinitely if not closed...
+        if self._root_vertex is None:
+            return ()
+
+        yield self._root_vertex
+        current_edge = self._root_vertex._edge
+        while current_edge is not None and current_edge.destination is not self._root_vertex:
+            yield current_edge.destination
+            current_edge = current_edge.destination._edge
+
+    def points(self) -> Iterator[Point]:
+        for vertex in self._vertices():
+            if vertex._edge is not None:
+                incident_edge = vertex._edge._prev._twin
+                while incident_edge is not vertex._edge and incident_edge._prev._twin is not vertex._edge:
+                    yield vertex._point
+                    yield incident_edge.destination._point
+                    incident_edge = incident_edge._prev._twin
+
+    def animation_events(self) -> Iterator[AnimationEvent]:
+        pass
+
+    def add_vertex(self, vertex_position: Point) -> Optional[Vertex]:   # TODO: return edge?
+        if self._is_closed:
+            return None
+
+        vertex = Vertex(vertex_position)
+
+        if self._previous_vertex is None:
+            self._root_vertex = vertex
+        else:
+            forward_edge = HalfEdge(self._previous_vertex)
+            backward_edge = HalfEdge(vertex)
+            vertex._edge = backward_edge
+            forward_edge._make_twin(backward_edge)
+            forward_edge._make_next(backward_edge)
+            if self._previous_vertex._edge is None:
+                forward_edge._make_prev(backward_edge)
+            else:
+                forward_edge._make_prev(self._previous_vertex._edge._twin)
+                backward_edge._make_next(self._previous_vertex._edge)
+            self._previous_vertex._edge = forward_edge
+
+        self._previous_vertex = vertex
+        self._number_of_vertices += 1
+
+        return vertex
+
+    """ def is_triangle(self) -> bool:
+        return self._is_closed and len(list(zip(self._vertices(), range(4)))) == 3 """
+
+    def check_simplicity(vertex_position: Optional[Point]) -> bool:     # TODO: how to go about this?
+        pass
+
+    def close(self):        # TODO: Use close for type transformation.
+        if self._is_closed or self._number_of_vertices < 3:    # TODO: which checks are necessary?
+            return
+
+        forward_edge = HalfEdge(self._previous_vertex)
+        backward_edge = HalfEdge(self._root_vertex)
+        forward_edge._make_twin(backward_edge)
+        forward_edge._make_next(self._root_vertex._edge)
+        backward_edge._make_prev(self._root_vertex._edge._twin)
+        forward_edge._make_prev(self._previous_vertex._edge._twin)
+        backward_edge._make_next(self._previous_vertex._edge)
+        self._previous_vertex._edge = forward_edge
+
+        # find topmost vertex (always a start vertex)
+        topmost_vertex = self._root_vertex
+        for vertex in self._vertices():
+            if vertex.y > topmost_vertex.y or (vertex.y == topmost_vertex.y and vertex.x < topmost_vertex.x):
+                topmost_vertex = vertex
+
+        # turn edges around if they are not in counterclockwise direction around polygonal face
+        ort = topmost_vertex.orientation(topmost_vertex._edge._prev._origin, topmost_vertex._edge.destination)
+        if ort is not Orientation.RIGHT:
+            self._root_vertex._edge = self._root_vertex._edge._prev._twin
+            current_vertex = self._root_vertex._edge.destination
+            while current_vertex is not self._root_vertex:
+                current_vertex._edge = current_vertex._edge._prev._twin
+                current_vertex = current_vertex._edge.destination
+
+        self._is_closed = True
+
+    # edge1 and edge2 need to bound the same face, so one could store the incident face for each edge.
+    # However, adding a diagonal would then require updating these faces in O(n) time...
+    def add_diagonal(self, edge1: HalfEdge, edge2: HalfEdge) -> Optional[HalfEdge]:
+        vertex1 = edge1._origin
+        vertex2 = edge2._origin
+
+        if not self._is_closed and vertex1 is not vertex2 and vertex1._edge.destination is not vertex2 \
+             and vertex2._edge.destination is not vertex1:     # TODO: which checks are necessary?
+            return None
+        
+        diagonal1 = HalfEdge(vertex1)
+        diagonal2 = HalfEdge(vertex2)
+        diagonal1._make_twin(diagonal2)
+        diagonal1._make_prev(edge1._prev)
+        diagonal2._make_prev(edge2._prev)
+        diagonal1._make_next(edge2)
+        diagonal2._make_next(edge1)
+
+        return diagonal1
+
+    def __len__(self) -> int:
+        return self._number_of_vertices
+
+class Vertex:
+    def __init__(self, point: Point):
+        self._point = point
+        self._edge: Optional[HalfEdge] = None
+
+    @property
+    def x(self) -> float:
+        return self._point.x
+
+    @property
+    def y(self) -> float:
+        return self._point.y
+
+    def orientation(self, source: Vertex, target: Vertex) -> Orientation:
+        self._point.orientation(source._point, target._point)
+
+class HalfEdge:
+    def __init__(self, origin: Vertex):
+        self._origin = origin
+        self._twin: Optional[HalfEdge] = None
+        self._next: Optional[HalfEdge] = None
+        self._prev: Optional[HalfEdge] = None
+
+    @property
+    def destination(self) -> Vertex:
+        return self._twin._origin
+
+    def _make_twin(self, twin: HalfEdge):
+        self._twin = twin
+        twin._twin = self
+
+    def _make_prev(self, prev: HalfEdge):
+        self._prev = prev
+        prev._next = self
+
+    def _make_next(self, next: HalfEdge):
+        self._next = next
+        next._prev = self
