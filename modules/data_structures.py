@@ -100,11 +100,11 @@ class Node(Generic[K, V]):
         self._make_empty()
 
     def _make_empty(self):
-        self._key = None
-        self._value = None
-        self._level = 0
-        self._left = None
-        self._right = None
+        self._key: Optional[K] = None
+        self._value: Optional[V] = None
+        self._level: int = 0
+        self._left: Optional[Node] = None
+        self._right: Optional[Node] = None
 
     def is_empty(self) -> bool:
         return self._level == 0
