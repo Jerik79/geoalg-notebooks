@@ -1,45 +1,13 @@
 from __future__ import annotations
-from typing import Any, Iterable, Iterator, Optional
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from itertools import islice
 import time
+from typing import Any, Iterable, Iterator, Optional
 
-from geometry import Point, PointReference
+from ..geometry.core import AnimationEvent, AppendEvent, Point, PointReference, PopEvent, SetEvent
 
 from ipycanvas import Canvas, hold_canvas
-
-
-class AnimationEvent(ABC):
-    @abstractmethod
-    def execute_on(self, points: list[Point]):
-        pass
-
-class AppendEvent(AnimationEvent):
-    def __init__(self, point: Point):
-        self.point = point
-
-    def execute_on(self, points: list[Point]):
-        points.append(self.point)
-
-class PopEvent(AnimationEvent):
-    def execute_on(self, points: list[Point]):
-        points.pop()
-
-class SetEvent(AnimationEvent):
-    def __init__(self, key: int, point: Point):
-        self.key = key
-        self.point = point
-
-    def execute_on(self, points: list[Point]):
-        points[self.key] = self.point
-
-class DeleteEvent(AnimationEvent):
-    def __init__(self, key: int):
-        self.key = key
-
-    def execute_on(self, points: list[Point]):
-        del points[self.key]
 
 
 class CanvasDrawingHandle:

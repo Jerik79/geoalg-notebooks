@@ -1,20 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Optional, TypeVar
 from itertools import chain
 import time
+from typing import Callable, Generic, Optional, TypeVar
 
-from geometry import GeometricPrimitive, Point, LineSegment, DoublyConnectedPolygon
-from .drawing import DrawingMode, PointsMode, LineSegmentsMode, PolygonMode
+from ..geometry.core import GeometricObject, LineSegment, Point
+from ..geometry.objects import DoublyConnectedPolygon
+from .drawing import DrawingMode, LineSegmentsMode, PointsMode, PolygonMode
 
 import numpy as np
 
 
-T = TypeVar("T")
+I = TypeVar("I")
 
-Algorithm = Callable[[T], GeometricPrimitive]
+Algorithm = Callable[[I], GeometricObject]
 
-class InstanceHandle(ABC, Generic[T]):
-    def __init__(self, instance: T, drawing_mode: DrawingMode):
+class InstanceHandle(ABC, Generic[I]):
+    def __init__(self, instance: I, drawing_mode: DrawingMode):
         self._instance = instance
         self._drawing_mode = drawing_mode
 
@@ -22,7 +23,7 @@ class InstanceHandle(ABC, Generic[T]):
     def drawing_mode(self) -> DrawingMode:
         return self._drawing_mode
 
-    def run_algorithm(self, algorithm: Algorithm[T]) -> tuple[GeometricPrimitive, float]:
+    def run_algorithm(self, algorithm: Algorithm[I]) -> tuple[GeometricObject, float]:
         start_time = time.time()
         algorithm_output = algorithm(self._instance)
         end_time = time.time()
@@ -42,7 +43,7 @@ class InstanceHandle(ABC, Generic[T]):
 
     @staticmethod
     @abstractmethod
-    def extract_points_from_raw_instance(instance: T) -> list[Point]:
+    def extract_points_from_raw_instance(instance: I) -> list[Point]:
         pass
 
     @property
@@ -142,7 +143,7 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedPolygon]):
             drawing_mode = PolygonMode(draw_interior = False)
         super().__init__(DoublyConnectedPolygon(), drawing_mode)
 
-    def run_algorithm(self, algorithm: Algorithm[T]) -> tuple[GeometricPrimitive, float]:
+    def run_algorithm(self, algorithm: Algorithm[I]) -> tuple[GeometricObject, float]:
         self._instance.close()      # TODO: This is inconvenient...
         return super().run_algorithm(algorithm)
 

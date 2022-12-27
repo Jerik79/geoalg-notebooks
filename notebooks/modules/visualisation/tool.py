@@ -1,18 +1,16 @@
-from typing import Callable, Generic, TypeVar, Optional, Iterable
 import time
+from typing import Callable, Generic, Iterable, Optional
 
-from geometry import Point
-from .instances import Algorithm, InstanceHandle
-from .drawing import CanvasDrawingHandle, DrawingMode, Drawer
+from ..geometry.core import Point
+from .drawing import CanvasDrawingHandle, Drawer, DrawingMode
+from .instances import Algorithm, I, InstanceHandle
 
 from ipycanvas import MultiCanvas
 from ipywidgets import Output, Button, Checkbox, HBox, VBox, IntSlider, Layout, HTML, dlink, Widget, BoundedIntText
 from IPython.display import display, display_html
 
 
-T = TypeVar("T")
-
-class VisualisationTool(Generic[T]):
+class VisualisationTool(Generic[I]):
     ## Constants.
 
     _DEFAULT_VBOX_ITEM_MARGIN = "0px 0px 20px 0px"
@@ -27,7 +25,7 @@ class VisualisationTool(Generic[T]):
 
     ## Initialisation methods.
 
-    def __init__(self, width: int, height: int, instance: InstanceHandle[T], notebook_number: Optional[int] = None):
+    def __init__(self, width: int, height: int, instance: InstanceHandle[I], notebook_number: Optional[int] = None):
         self._width = width
         self._height = height
 
@@ -157,7 +155,7 @@ class VisualisationTool(Generic[T]):
     def display(self):
         if self._notebook_number is not None:
             image_filename = f"{self._notebook_number:0>2}-image{self._next_image_number:0>2}.png"
-            display_html(f"<img style='float: left;' src='../images/{image_filename}'>", raw = True)
+            display_html(f"<img style='float: left;' src='./images/{image_filename}'>", raw = True)
             self._next_image_number += 1
             return
 
@@ -232,14 +230,14 @@ class VisualisationTool(Generic[T]):
         for label in self._message_labels:
             label.value = "<br>"
 
-    def register_example_instance(self, name: str, instance: T):
+    def register_example_instance(self, name: str, instance: I):
         example_instance_points = self._instance.extract_points_from_raw_instance(instance)
         def example_instance_callback():
             self.clear()
             self.add_points(example_instance_points)
         self._example_buttons.append(self._create_button(name, example_instance_callback))
 
-    def register_algorithm(self, name: str, algorithm: Algorithm[T], drawing_mode: DrawingMode):
+    def register_algorithm(self, name: str, algorithm: Algorithm[I], drawing_mode: DrawingMode):
         algorithm_drawer = Drawer(drawing_mode, self._ab_canvas, self._am_canvas, self._af_canvas)
         label_index = len(self._message_labels)
         self._message_labels.append(HTML(value = "<br>", layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
