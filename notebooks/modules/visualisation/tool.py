@@ -57,6 +57,8 @@ class VisualisationTool(Generic[I]):
         for i in range(0, 6):
             self._multi_canvas[i].translate(0, self._height)
             self._multi_canvas[i].scale(1, -1)
+            self._multi_canvas[i].line_cap = "round"
+            self._multi_canvas[i].line_join = "round"
             if i != 5:
                 self._multi_canvas[i].line_width = 3        # TODO: This could be a parameter of CanvasDrawingHandle.draw_path(...).
 
