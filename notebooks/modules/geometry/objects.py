@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections import OrderedDict
+from itertools import chain
 from typing import Any, Iterable, Iterator, Optional, Union
 
 from .core import *
@@ -101,7 +102,7 @@ class DoublyConnectedPolygon(GeometricObject):
         self._previous_vertex: Optional[Vertex] = None
         self._number_of_vertices: int = 0
 
-    def _vertices(self) -> Iterator[Vertex]:    # TODO: This loops infinitely if not closed...
+    def _vertices(self) -> Iterator[Vertex]:
         if self._root_vertex is None:
             return ()
 
@@ -109,9 +110,11 @@ class DoublyConnectedPolygon(GeometricObject):
         current_edge = self._root_vertex._edge
         while current_edge is not None and current_edge.destination is not self._root_vertex:
             yield current_edge.destination
+            if current_edge.destination._edge is current_edge._twin:
+                break
             current_edge = current_edge.destination._edge
 
-    def points(self) -> Iterator[Point]:
+    def points(self) -> Iterator[Point]:    # TODO: This is not that useful since it's targeted towards LineSegmentsMode.
         for vertex in self._vertices():
             if vertex._edge is not None:
                 incident_edge = vertex._edge._prev._twin
@@ -152,12 +155,42 @@ class DoublyConnectedPolygon(GeometricObject):
     """ def is_triangle(self) -> bool:
         return self._is_closed and len(list(zip(self._vertices(), range(4)))) == 3 """
 
-    def check_simplicity(vertex_position: Optional[Point]) -> bool:     # TODO: how to go about this?
-        pass
+    def check_simplicity(self, potential_vertex_position: Optional[Point]) -> bool:     # TODO: Is this alright?
+        if self._number_of_vertices < 2:
+            return True
 
-    def close(self):        # TODO: Use close for type transformation.
-        if self._is_closed or self._number_of_vertices < 3:    # TODO: which checks are necessary?
+        line_segments: list[LineSegment] = []
+        
+        vertices = self._vertices()
+        next_vertex = next(vertices, None)
+
+        while next_vertex is not None:
+            vertex = next_vertex
+            next_vertex = next(vertices, None)
+
+            if next_vertex is not None:
+                line_segments.append(LineSegment(vertex._point, next_vertex._point))
+            else:
+                line_segments.append(LineSegment(vertex._point, potential_vertex_position or self._root_vertex._point))
+
+        start = 0
+        if potential_vertex_position is None:
+            start = 1
+            if isinstance(line_segments[-1].intersection(line_segments[0]), LineSegment):
+                return False
+
+        for segment in line_segments[start:-2]:
+            if line_segments[-1].intersection(segment) is not None:
+                return False
+
+        return not isinstance(line_segments[-1].intersection(line_segments[-2]), LineSegment)
+
+    def close(self):        # TODO: Is this alright? Maybe use close for type transformation.
+        if self._is_closed or self._number_of_vertices < 3:
             return
+
+        if not self.check_simplicity(None):
+            raise ValueError("Can't be closed")
 
         forward_edge = HalfEdge(self._previous_vertex)
         backward_edge = HalfEdge(self._root_vertex)
@@ -209,7 +242,7 @@ class DoublyConnectedPolygon(GeometricObject):
         return self._number_of_vertices
 
 class Vertex:
-    def __init__(self, point: Point):
+    def __init__(self, point: Point):       # TODO: Create properties for access, and magic methods.
         self._point = point
         self._edge: Optional[HalfEdge] = None
 
@@ -222,10 +255,13 @@ class Vertex:
         return self._point.y
 
     def orientation(self, source: Vertex, target: Vertex) -> Orientation:
-        self._point.orientation(source._point, target._point)
+        return self._point.orientation(source._point, target._point)
+
+    def __repr__(self) -> str:              # Is this good?
+        return f"Vertex@{self._point}"
 
 class HalfEdge:
-    def __init__(self, origin: Vertex):
+    def __init__(self, origin: Vertex):     # TODO: Create properties for access, and magic methods.
         self._origin = origin
         self._twin: Optional[HalfEdge] = None
         self._next: Optional[HalfEdge] = None
@@ -234,6 +270,14 @@ class HalfEdge:
     @property
     def destination(self) -> Vertex:
         return self._twin._origin
+
+    @property
+    def upper_and_lower(self) -> tuple[Vertex, Vertex]:     # Do this differently?
+        p, q = self._origin, self.destination
+        if p.y > q.y or (p.y == q.y and p.x < q.x):
+            return p, q
+        else:
+            return q, p
 
     def _make_twin(self, twin: HalfEdge):
         self._twin = twin
@@ -246,3 +290,6 @@ class HalfEdge:
     def _make_next(self, next: HalfEdge):
         self._next = next
         next._prev = self
+
+    def __repr__(self) -> str:               # Is this good?
+        return f"Edge@{self._origin._point}"

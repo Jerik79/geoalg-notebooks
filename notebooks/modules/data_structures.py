@@ -54,13 +54,15 @@ class BinaryTree(Generic[K]):
         return self._root.pop_first(self._comparator)[0]
 
     def search_matching(self, item: Any) -> list[K]:
-        return list(self._root.search_matching(item, self._comparator))
+        return [match[0] for match in self._root.search_matching(item, self._comparator)]
 
     def search_predecessor(self, item: Any) -> Optional[K]:
-        return self._root.search_predecessor(item, self._comparator)
+        predecessor = self._root.search_predecessor(item, self._comparator)
+        return predecessor[0] if predecessor is not None else None
 
     def search_successor(self, item: Any) -> Optional[K]:
-        return self._root.search_successor(item, self._comparator)
+        successor = self._root.search_successor(item, self._comparator)
+        return successor[0] if successor is not None else None
 
 # TODO: The values should be utilised more. There isn't even a get_value(key) method right now.
 class BinaryTreeDict(Generic[K, V]):
@@ -77,7 +79,7 @@ class BinaryTreeDict(Generic[K, V]):
     def update(self, key: K, value_updater: Updater[V]) -> bool:
         return self._root.update(key, value_updater, self._comparator)
 
-    def delete(self, key: K) -> tuple[bool, Optional[V]]:
+    def delete(self, key: K) -> tuple[bool, Optional[V]]:       # Maybe return key instead of bool?
         return self._root.delete(key, self._comparator)
 
     def pop_first(self) -> Optional[tuple[K, V]]:
@@ -86,14 +88,17 @@ class BinaryTreeDict(Generic[K, V]):
 
         return self._root.pop_first(self._comparator)
 
-    def search_matching(self, item: Any) -> list[K]:
+    def search_matching(self, item: Any) -> list[tuple[K, V]]:
         return list(self._root.search_matching(item, self._comparator))
 
-    def search_predecessor(self, item: Any) -> Optional[K]:
+    def search_predecessor(self, item: Any) -> Optional[tuple[K, V]]:
         return self._root.search_predecessor(item, self._comparator)
 
-    def search_predecessor(self, item: Any) -> Optional[K]:
+    def search_successor(self, item: Any) -> Optional[tuple[K, V]]:
         return self._root.search_successor(item, self._comparator)
+
+    def __repr__(self) -> str:          # TODO: Delete this? Or can it stay?
+        return self._root.__repr__()
 
 class Node(Generic[K, V]):
     def __init__(self):
@@ -103,8 +108,8 @@ class Node(Generic[K, V]):
         self._key: Optional[K] = None
         self._value: Optional[V] = None
         self._level: int = 0
-        self._left: Optional[Node] = None
-        self._right: Optional[Node] = None
+        self._left: Optional[Node[K, V]] = None
+        self._right: Optional[Node[K, V]] = None
 
     def is_empty(self) -> bool:
         return self._level == 0
@@ -245,7 +250,7 @@ class Node(Generic[K, V]):
 
         return key, value
 
-    def search_matching(self, item: Any, comparator: Comparator[K]) -> Iterator[K]:
+    def search_matching(self, item: Any, comparator: Comparator[K]) -> Iterator[tuple[K, V]]:
         if self.is_empty():
             return ()
 
@@ -257,24 +262,32 @@ class Node(Generic[K, V]):
         else:
             return chain(
                 self._left.search_matching(item, comparator),
-                (self._key,),
+                ((self._key, self._value),),
                 self._right.search_matching(item, comparator)
             )
 
-    def search_predecessor(self, item: Any, comparator: Comparator[K], candidate: Optional[K] = None) -> Optional[K]:
+    def search_predecessor(self, item: Any, comparator: Comparator[K], candidate:
+    Optional[tuple[K, V]] = None) -> Optional[tuple[K, V]]:
         if self.is_empty():
             return candidate
 
         if comparator.compare(item, self._key) is ComparisonResult.AFTER:
-            return self._right.search_predecessor(item, comparator, self._key)
+            return self._right.search_predecessor(item, comparator, (self._key, self._value))
         else:
             return self._left.search_predecessor(item, comparator, candidate)
 
-    def search_successor(self, item: Any, comparator: Comparator[K], candidate: Optional[K] = None) -> Optional[K]:
+    def search_successor(self, item: Any, comparator: Comparator[K], candidate:
+    Optional[tuple[K, V]] = None) -> Optional[tuple[K, V]]:
         if self.is_empty():
             return candidate
 
         if comparator.compare(item, self._key) is ComparisonResult.BEFORE:
-            return self._left.search_successor(item, comparator, self._key)
+            return self._left.search_successor(item, comparator, (self._key, self._value))
         else:
             return self._right.search_successor(item, comparator, candidate)
+
+    def __repr__(self) -> str:
+        if self.is_empty():
+            return ""
+
+        return f"{self._key} [{self._left}] [{self._right}]"

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import copy
 from itertools import chain
 import time
 from typing import Callable, Generic, Optional, TypeVar
@@ -143,11 +144,16 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedPolygon]):
             drawing_mode = PolygonMode(draw_interior = False)
         super().__init__(DoublyConnectedPolygon(), drawing_mode)
 
-    def run_algorithm(self, algorithm: Algorithm[I]) -> tuple[GeometricObject, float]:
-        self._instance.close()      # TODO: This is inconvenient...
-        return super().run_algorithm(algorithm)
+    def run_algorithm(self, algorithm: Algorithm[DoublyConnectedPolygon]) -> tuple[GeometricObject, float]:
+        copied_instance = copy.deepcopy(self._instance)
+        self._instance.close()
+        result = super().run_algorithm(algorithm)
+        self._instance = copied_instance
+        return result
 
-    def add_point(self, point: Point) -> bool:      # TODO: check simplicity...
+    def add_point(self, point: Point) -> bool:
+        if not self._instance.check_simplicity(point):
+            return False
         self._instance.add_vertex(point)
         return True
 
