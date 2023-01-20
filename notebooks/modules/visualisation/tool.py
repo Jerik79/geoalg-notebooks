@@ -30,27 +30,26 @@ class VisualisationTool(Generic[I]):
         self._height = height
 
         self._instance = instance
-        self._number_of_points = 0
+        self._number_of_points: int = 0
 
         self._notebook_number = notebook_number
-        self._next_image_number = 1
+        self._next_image_number: int = 1
 
-        self._multi_canvas = MultiCanvas(6, width = self._width, height = self._height)
-        self._init_canvases()
-
-        self._previous_callback_finish_time = time.time()
-        def handle_click_on_canvas(x, y):
-            if time.time() - self._previous_callback_finish_time < 1:       # TODO: This doesn't work well...
+        self._previous_callback_finish_time: float = time.time()
+        def handle_click_on_multi_canvas(x: float, y: float):
+            if time.time() - self._previous_callback_finish_time < 1.0:       # TODO: This doesn't work well...
                 return
             if self.add_point(Point(x, self._height - y)):
                 self.clear_algorithm_output()
                 self.clear_message_labels()
-        self._multi_canvas.on_mouse_down(handle_click_on_canvas)
 
+        self._multi_canvas = MultiCanvas(6, width = self._width, height = self._height)
+        self._multi_canvas.on_mouse_down(handle_click_on_multi_canvas)
         self._canvas_output = Output(layout = Layout(border = "1px solid black"))
         with self._canvas_output:
             display(self._multi_canvas)
 
+        self._init_canvases()
         self._init_ui()
 
     def _init_canvases(self):
@@ -75,7 +74,7 @@ class VisualisationTool(Generic[I]):
         for canvas in (self._ab_canvas, self._am_canvas):
             canvas.set_colour(0, 0, 255)
         self._af_canvas.set_colour(0, 0, 0)
-        self._current_algorithm_drawer = None
+        self._current_algorithm_drawer: Optional[Drawer] = None
 
     def _init_ui(self):
         self._instance_size_label = HTML()
@@ -101,11 +100,11 @@ class VisualisationTool(Generic[I]):
             layout = Layout(width = "85px", margin = "2px 5px 0px 1px")
         )
 
-        self._init_animation_ui()
+        self._example_buttons: list[Button] = []
+        self._algorithm_buttons: list[Button] = []
+        self._message_labels: list[HTML] = []
 
-        self._example_buttons = []
-        self._algorithm_buttons = []
-        self._message_labels = []
+        self._init_animation_ui()
 
     def _init_animation_ui(self):
         self._animation_checkbox = Checkbox(
@@ -248,8 +247,9 @@ class VisualisationTool(Generic[I]):
             self._message_labels[label_index].value = "RUNNING"
             try:
                 algorithm_output, algorithm_running_time = self._instance.run_algorithm(algorithm)
-            except:
-                self._message_labels[label_index].value = "<b><font color='red'>ERROR</font></b>"
+            except BaseException as exception:
+                title = str(exception).replace("'", "&apos;")
+                self._message_labels[label_index].value = f"<b title='{title}'><font color='red'>ERROR</font></b>"
                 return
             if not self._animation_checkbox.value:
                 algorithm_drawer.draw(algorithm_output.points())
