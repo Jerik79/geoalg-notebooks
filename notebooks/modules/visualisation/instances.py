@@ -5,7 +5,7 @@ import time
 from typing import Callable, Generic, Optional, TypeVar
 
 from ..geometry.core import GeometricObject, LineSegment, Point
-from ..geometry.objects import DoublyConnectedPolygon
+from ..geometry.objects import DoublyConnectedSimplePolygon
 from .drawing import DrawingMode, LineSegmentsMode, PointsMode, PolygonMode
 
 import numpy as np
@@ -25,8 +25,9 @@ class InstanceHandle(ABC, Generic[I]):
         return self._drawing_mode
 
     def run_algorithm(self, algorithm: Algorithm[I]) -> tuple[GeometricObject, float]:
+        copied_instance = copy.deepcopy(self._instance)
         start_time = time.time()
-        algorithm_output = algorithm(self._instance)
+        algorithm_output = algorithm(copied_instance)
         end_time = time.time()
         return algorithm_output, 1000 * (end_time - start_time)
 
@@ -95,8 +96,8 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
         if drawing_mode is None:
             drawing_mode = LineSegmentsMode(endpoint_radius = 3)
         super().__init__(set(), drawing_mode)
-        self._cached_point = None
-        self._cached_random_point = None
+        self._cached_point: Optional[Point] = None
+        self._cached_random_point: Optional[Point] = None
 
     def add_point(self, point: Point) -> bool:
         if self._cached_point is None:
@@ -138,24 +139,14 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
         return Point(x, y)
 
 
-class SimplePolygonInstance(InstanceHandle[DoublyConnectedPolygon]):
+class SimplePolygonInstance(InstanceHandle[DoublyConnectedSimplePolygon]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
         if drawing_mode is None:
             drawing_mode = PolygonMode(draw_interior = False)
-        super().__init__(DoublyConnectedPolygon(), drawing_mode)
-
-    def run_algorithm(self, algorithm: Algorithm[DoublyConnectedPolygon]) -> tuple[GeometricObject, float]:
-        copied_instance = copy.deepcopy(self._instance)
-        self._instance.close()
-        result = super().run_algorithm(algorithm)
-        self._instance = copied_instance
-        return result
+        super().__init__(DoublyConnectedSimplePolygon(), drawing_mode)
 
     def add_point(self, point: Point) -> bool:
-        if not self._instance.check_simplicity(point):
-            return False
-        self._instance.add_vertex(point)
-        return True
+        return self._instance.add_vertex(point) is not None
 
     def clear(self):
         self._instance.clear()
@@ -164,11 +155,11 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedPolygon]):
         return len(self._instance)
 
     @staticmethod
-    def extract_points_from_raw_instance(instance: DoublyConnectedPolygon) -> list[Point]:
-        return list(vertex._point for vertex in instance._vertices())
+    def extract_points_from_raw_instance(instance: DoublyConnectedSimplePolygon) -> list[Point]:
+        return [vertex.point for vertex in instance._vertices()]
 
     @property
     def default_number_of_random_points(self) -> int:
         return 25
 
-    # TODO: Implement get_random_point().
+    # TODO: Implement get_random_point() such that the polygon is simple and looks good.
