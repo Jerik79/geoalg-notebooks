@@ -90,10 +90,9 @@ class VisualisationTool(Generic[I]):
         )
         def random_button_callback():
             self.clear()
-            self.add_points(
-                self._instance.get_random_point(self._width, self._height)
-                for _ in range(self._random_button_int_text.value)
-            )
+            self.add_points(self._instance.generate_random_points(      # TODO: This can take long too.
+                self._width, self._height, self._random_button_int_text.value
+            ))
         self._random_button = self._create_button(
             "Random",
             random_button_callback,
@@ -109,7 +108,7 @@ class VisualisationTool(Generic[I]):
     def _init_animation_ui(self):
         self._animation_checkbox = Checkbox(
             value = False,
-            description = "Animate",
+            description = "Animate Algorithms",
             indent = False,
             layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)
         )
@@ -163,7 +162,7 @@ class VisualisationTool(Generic[I]):
         random_button_hbox = HBox([self._random_button, self._random_button_int_text])
         upper_ui_widget_row = HBox([
             self._vbox_with_header("Canvas", (self._clear_button, random_button_hbox)),
-            self._vbox_with_header("Animation", (self._animation_checkbox, self._animation_speed_slider)),
+            self._vbox_with_header("Animation", (self._animation_checkbox, self._animation_speed_slider))
         ], layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN))
 
         lower_ui_widget_row = HBox([
@@ -185,7 +184,7 @@ class VisualisationTool(Generic[I]):
         vbox_layout = Layout(padding = "0px 25px", align_items = "flex-end" if right_aligned else "flex-start")
         return VBox([header, *children], layout = vbox_layout)
 
-    def add_point(self, point: Point) -> bool:
+    def add_point(self, point: Point) -> bool:          # TODO: Check if point is on canvas, otherwise ValueError.
         if self._number_of_points >= 999:
             return False
         needs_draw = self._instance.add_point(point)
@@ -195,7 +194,7 @@ class VisualisationTool(Generic[I]):
             self._update_instance_size_label()
         return needs_draw
 
-    def add_points(self, points: Iterable[Point]):
+    def add_points(self, points: Iterable[Point]):      # TODO: Check if points are on canvas, otherwise ValueError.
         points_to_draw = []
         for point in points:
             if self._number_of_points >= 999:
@@ -232,7 +231,7 @@ class VisualisationTool(Generic[I]):
             label.value = "<br>"
 
     def register_example_instance(self, name: str, instance: I):
-        example_instance_points = self._instance.extract_points_from_raw_instance(instance)
+        example_instance_points = self._instance.extract_points_from_raw_instance(instance)  # TODO: Check if points are on canvas, otherwise ValueError.
         def example_instance_callback():
             self.clear()
             self.add_points(example_instance_points)
@@ -244,7 +243,7 @@ class VisualisationTool(Generic[I]):
         self._message_labels.append(HTML(value = "<br>", layout = Layout(margin = self._DEFAULT_VBOX_ITEM_MARGIN)))
         def algorithm_callback():
             self.clear_algorithm_output()
-            self._message_labels[label_index].value = "RUNNING"
+            self._message_labels[label_index].value = "<b>RUNNING</b>"
             try:
                 algorithm_output, algorithm_running_time = self._instance.run_algorithm(algorithm)
             except BaseException as exception:
@@ -254,7 +253,7 @@ class VisualisationTool(Generic[I]):
             if not self._animation_checkbox.value:
                 algorithm_drawer.draw(algorithm_output.points())
             else:
-                self._message_labels[label_index].value = "ANIMATING"
+                self._message_labels[label_index].value = "<b><font color='blue'>ANIMATING</font></b>"
                 animation_time_step = 1.1 - 0.1 * self._animation_speed_slider.value
                 algorithm_drawer.animate(algorithm_output.animation_events(), animation_time_step)
             self._message_labels[label_index].value = f"{algorithm_running_time:.3f} ms"

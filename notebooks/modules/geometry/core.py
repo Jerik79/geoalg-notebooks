@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Iterator, Optional, SupportsFloat, Union
 from enum import auto, Enum
 import math
 
@@ -36,9 +36,9 @@ class GeometricObject(ABC):
 
 
 class Point(GeometricObject):
-    def __init__(self, x: float, y: float):
-        self.x = x
-        self.y = y
+    def __init__(self, x: SupportsFloat, y: SupportsFloat):
+        self.x = float(x)
+        self.y = float(y)
 
     def points(self) -> Iterator[Point]:
         yield self
@@ -176,7 +176,7 @@ class LineSegment(GeometricObject):
         return f"{self.upper}--{self.lower}"
 
 
-class AnimationEvent(ABC):
+class AnimationEvent(ABC):      # TODO: Maybe use an Enum instead...
     @abstractmethod
     def execute_on(self, points: list[Point]):
         pass
@@ -206,3 +206,7 @@ class DeleteEvent(AnimationEvent):
 
     def execute_on(self, points: list[Point]):
         del points[self.key]
+
+class ClearEvent(AnimationEvent):
+    def execute_on(self, points: list[Point]):
+        points.clear()

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import copy
 from itertools import chain
 import time
 from typing import Callable, Generic, Optional, TypeVar
@@ -25,10 +24,16 @@ class InstanceHandle(ABC, Generic[I]):
         return self._drawing_mode
 
     def run_algorithm(self, algorithm: Algorithm[I]) -> tuple[GeometricObject, float]:
-        copied_instance = copy.deepcopy(self._instance)
-        start_time = time.time()
-        algorithm_output = algorithm(copied_instance)
-        end_time = time.time()
+        instance_points = self.extract_points_from_raw_instance(self._instance)
+
+        start_time = time.perf_counter()
+        algorithm_output = algorithm(self._instance)
+        end_time = time.perf_counter()
+
+        self.clear()
+        for point in instance_points:
+            self.add_point(point)
+
         return algorithm_output, 1000 * (end_time - start_time)
 
     @abstractmethod
@@ -53,10 +58,10 @@ class InstanceHandle(ABC, Generic[I]):
     def default_number_of_random_points(self) -> int:
         pass
 
-    def get_random_point(self, max_x: float, max_y: float) -> Point:
-        x = np.random.uniform(0.05 * max_x, 0.95 * max_x)
-        y = np.random.uniform(0.05 * max_y, 0.95 * max_y)
-        return Point(x, y)
+    def generate_random_points(self, max_x: float, max_y: float, number: int) -> list[Point]:
+        x_values = np.random.uniform(0.05 * max_x, 0.95 * max_x, number)
+        y_values = np.random.uniform(0.05 * max_y, 0.95 * max_y, number)
+        return [Point(x, y) for x, y  in zip(x_values, y_values)]
 
 
 class PointSetInstance(InstanceHandle[set[Point]]):
@@ -69,6 +74,7 @@ class PointSetInstance(InstanceHandle[set[Point]]):
         if point in self._instance:
             return False
         self._instance.add(point)
+
         return True
 
     def clear(self):
@@ -85,19 +91,18 @@ class PointSetInstance(InstanceHandle[set[Point]]):
     def default_number_of_random_points(self) -> int:
         return 250
 
-    def get_random_point(self, max_x: float, max_y: float) -> Point:
-        x = float(np.clip(np.random.normal(0.5 * max_x, 0.15 * max_x), 0.05 * max_x, 0.95 * max_x))
-        y = float(np.clip(np.random.normal(0.5 * max_y, 0.15 * max_y), 0.05 * max_y, 0.95 * max_y))
-        return Point(x, y)
+    def generate_random_points(self, max_x: float, max_y: float, number: int) -> list[Point]:
+        x_values = np.clip(np.random.normal(0.5 * max_x, 0.15 * max_x, number), 0.05 * max_x, 0.95 * max_x)
+        y_values = np.clip(np.random.normal(0.5 * max_y, 0.15 * max_y, number), 0.05 * max_y, 0.95 * max_y)
+        return [Point(x, y) for x, y in zip(x_values, y_values)]
 
 
 class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
         if drawing_mode is None:
-            drawing_mode = LineSegmentsMode(endpoint_radius = 3)
+            drawing_mode = LineSegmentsMode(vertex_radius = 3)
         super().__init__(set(), drawing_mode)
         self._cached_point: Optional[Point] = None
-        self._cached_random_point: Optional[Point] = None
 
     def add_point(self, point: Point) -> bool:
         if self._cached_point is None:
@@ -105,17 +110,18 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
             return True
         elif self._cached_point == point:
             return False
+
         line_segment = LineSegment(self._cached_point, point)
         if line_segment in self._instance:
             return False
         self._instance.add(line_segment)
         self._cached_point = None
+
         return True
 
     def clear(self):
         self._instance.clear()
         self._cached_point = None
-        self._cached_random_point = None
 
     def size(self) -> int:
         return len(self._instance)
@@ -128,25 +134,34 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
     def default_number_of_random_points(self) -> int:
         return 500
 
-    def get_random_point(self, max_x: float, max_y: float) -> Point:
-        if self._cached_random_point is None:
-            self._cached_random_point = super().get_random_point(max_x, max_y)
-            return self._cached_random_point
-        scale = np.random.uniform(0.01, 0.05)
-        x = float(np.clip(np.random.normal(self._cached_random_point.x, scale * max_x), 0.05 * max_x, 0.95 * max_x))
-        y = float(np.clip(np.random.normal(self._cached_random_point.y, scale * max_y), 0.05 * max_y, 0.95 * max_y))
-        self._cached_random_point = None
-        return Point(x, y)
+    def generate_random_points(self, max_x: float, max_y: float, number: int) -> list[Point]:
+        points: list[Point] = []
+        for point in super().generate_random_points(max_x, max_y, number // 2):
+            points.append(point)
+            scale = np.random.uniform(0.01, 0.05)
+            x = np.clip(np.random.normal(point.x, scale * max_x), 0.05 * max_x, 0.95 * max_x)
+            y = np.clip(np.random.normal(point.y, scale * max_y), 0.05 * max_y, 0.95 * max_y)
+            points.append(Point(x, y))
+
+        if number % 2 == 1:
+            points.extend(super().generate_random_points(max_x, max_y, 1))
+
+        return points
 
 
 class SimplePolygonInstance(InstanceHandle[DoublyConnectedSimplePolygon]):
     def __init__(self, drawing_mode: Optional[DrawingMode] = None):
         if drawing_mode is None:
-            drawing_mode = PolygonMode(draw_interior = False)
+            drawing_mode = PolygonMode(mark_closing_edge = True, draw_interior = False, vertex_radius = 3)
         super().__init__(DoublyConnectedSimplePolygon(), drawing_mode)
 
     def add_point(self, point: Point) -> bool:
-        return self._instance.add_vertex(point) is not None
+        try:
+            self._instance.add_vertex(point)
+        except BaseException:
+            return False
+
+        return True
 
     def clear(self):
         self._instance.clear()
@@ -156,10 +171,19 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedSimplePolygon]):
 
     @staticmethod
     def extract_points_from_raw_instance(instance: DoublyConnectedSimplePolygon) -> list[Point]:
-        return [vertex.point for vertex in instance._vertices()]
+        return [vertex.point for vertex in instance.vertices()]
 
     @property
     def default_number_of_random_points(self) -> int:
-        return 25
+        return 100
 
-    # TODO: Implement get_random_point() such that the polygon is simple and looks good.
+    def generate_random_points(self, max_x: float, max_y: float, number: int) -> list[Point]:
+        while True:
+            points = super().generate_random_points(max_x, max_y, number)
+
+            try:
+                polygon = DoublyConnectedSimplePolygon.try_from_unordered_points(points)
+            except BaseException:
+                continue
+
+            return self.extract_points_from_raw_instance(polygon)
