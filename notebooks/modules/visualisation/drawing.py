@@ -279,8 +279,9 @@ class PolygonMode(PathMode):           # TODO: If possible, maybe use compositio
 
     def _polygon_event_iterator(self, animation_events: Iterable[AnimationEvent]) -> Iterator[AnimationEvent]:
         yield from animation_events
-        yield AppendEvent(self._animation_path[0])
-        yield PopEvent()
+        if self._animation_path:
+            yield AppendEvent(self._animation_path[0])
+            yield PopEvent()
 
     def animate(self, drawer: Drawer, animation_events: Iterable[AnimationEvent], animation_time_step: float):
         super().animate(drawer, self._polygon_event_iterator(animation_events), animation_time_step)
