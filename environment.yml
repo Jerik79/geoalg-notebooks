@@ -1,8 +1,9 @@
+name: geoalg-nb
 channels:
   - conda-forge
 dependencies:
-  - python=3.9
-  - numpy==1.20.3
-  - ipython==7.29.0
-  - ipywidgets==7.6.5
-  - ipycanvas==0.11.0
+  - python=3.11
+  - ipython==8.12.0
+  - ipywidgets==8.0.6
+  - ipycanvas==0.13.1
+  - numpy==1.24.2
