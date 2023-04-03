@@ -1,0 +1,60 @@
+abstract: "Interactive notebooks providing implementations, explanations and visualisations of geometric algorithms."
+authors:
+  - family-names: "Swiadek"
+    given-names: "Jan Erik"
+    orcid: "https://orcid.org/0000-0001-7936-4795"
+  - family-names: "Buchin"
+    given-names: "Kevin"
+    orcid: "https://orcid.org/0000-0002-3022-7877"
+cff-version: "1.2.0"
+#date-released: "TODO"
+license: BSD-3-Clause
+message: "If you use this software, please cite it using the metadata from this file."
+references:
+  - authors:
+      - family-names: "Berg"
+        given-names: "Mark"
+        name-particle: "de"
+      - family-names: "Cheong"
+        given-names: "Otfried"
+      - family-names: "Kreveld"
+        given-names: "Marc"
+        name-particle: "van"
+      - family-names: "Overmars"
+        given-names: "Mark"
+    edition: "3rd edition"
+    title: "Computational Geometry: Algorithms and Applications"
+    type: book
+    year: "2008"
+  - authors:
+      - family-names: "Mount"
+        given-names: "David M."
+    title: "CMSC 754: Computational Geometry (Spring 2020)"
+    type: generic
+    url: "https://www.cs.umd.edu/class/spring2020/cmsc754/Lects/cmsc754-spring2020-lects.pdf"
+    year: "2020"
+  - authors:
+      - name: "Project Jupyter Contributors"
+        website: "https://jupyter.org/"
+    license: BSD-3-Clause
+    repository-code: "https://github.com/jupyter-widgets/ipywidgets"
+    title: "ipywidgets"
+    type: software
+    version: "8.0.6"
+    year: "2023"
+    year-original: "2015"
+  - authors:
+      - family-names: "Renou"
+        given-names: "Martin"
+    license: BSD-3-Clause
+    repository-code: "https://github.com/martinRenou/ipycanvas"
+    title: "ipycanvas"
+    type: software
+    version: "0.13.1"
+    year: "2022"
+    year-original: "2019"
+repository-code: "https://github.com/Jerik79/geoalg-notebooks"
+title: "Geometric Algorithms: Interactive Notebooks"
+type: software
+#url: "TODO"
+#version: "TODO"
