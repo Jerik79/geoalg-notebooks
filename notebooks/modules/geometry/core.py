@@ -9,7 +9,7 @@ EPSILON: float = 1e-9      # This seems to be a good value, at least for our sta
 
 def set_epsilon(epsilon: float):
     if not math.isfinite(epsilon) or epsilon < 0.0:
-        return ValueError("The epsilon value must be a finite positive number.")
+        raise ValueError("The epsilon value must be a finite positive number.")
     global EPSILON
     EPSILON = epsilon
 

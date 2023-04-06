@@ -334,7 +334,7 @@ class FixedVertexNumberPathsMode(DrawingMode):
     def __init__(self, vertex_number: int, vertex_radius: int = DEFAULT_POINT_RADIUS,
     highlight_radius: int = DEFAULT_HIGHLIGHT_RADIUS):
         if vertex_number < 1:
-            return ValueError("Vertex number needs to be positive.")
+            raise ValueError("Vertex number needs to be positive.")
         self._vertex_number = vertex_number
         self._vertex_radius = vertex_radius
         self._highlight_radius = highlight_radius
