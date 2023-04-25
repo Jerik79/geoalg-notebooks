@@ -30,7 +30,7 @@ class VisualisationTool(Generic[I]):
 
     ## Initialisation methods.
 
-    def __init__(self, width: int, height: int, instance: InstanceHandle[I], notebook_number: Optional[int] = None):
+    def __init__(self, width: int, height: int, instance: InstanceHandle[I], notebook_number: Optional[int] = None):    # TODO: Check positivity.
         self._width = width
         self._height = height
 
@@ -248,7 +248,7 @@ class VisualisationTool(Generic[I]):
 
             try:
                 algorithm_output, algorithm_running_time = self._instance.run_algorithm(algorithm)
-            except BaseException as exception:
+            except Exception as exception:
                 title = html.escape(str(exception), quote = True)
                 self._algorithm_messages[index].value = f"<b title='{title}'><font color='red'>ERROR</font></b>"
                 return

@@ -5,28 +5,18 @@ from enum import auto, Enum
 import math
 
 
-EPSILON: float = 1e-9      # This seems to be a good value, at least for our standard coordinate range (0 to 400).
-
-def set_epsilon(epsilon: float):
-    if not math.isfinite(epsilon) or epsilon < 0.0:
-        raise ValueError("The epsilon value must be a finite positive number.")
-    global EPSILON
-    EPSILON = epsilon
-
-def reset_epsilon():
-    global EPSILON
-    EPSILON = 1e-9
+EPSILON: float = 1e-9    # Chosen by testing currently implemented algorithms with the visualisation tool.
 
 
 class Orientation(Enum):
     LEFT = auto()
     RIGHT = auto()
-    BEHIND_SOURCE = auto()
     BETWEEN = auto()
+    BEFORE_SOURCE = auto()
     BEHIND_TARGET = auto()
 
 
-class GeometricObject(ABC):
+class GeometricObject(ABC):     # TODO: Rename, move and export this.
     @abstractmethod
     def points(self) -> Iterator[Point]:
         pass
@@ -35,72 +25,94 @@ class GeometricObject(ABC):
         return (AppendEvent(point) for point in self.points())
 
 
-class Point(GeometricObject):
+class Point:
     def __init__(self, x: SupportsFloat, y: SupportsFloat):
-        self.x = float(x)
-        self.y = float(y)
+        self._x = float(x)
+        self._y = float(y)
 
-    def points(self) -> Iterator[Point]:
-        yield self
+    ## Properties
+
+    @property
+    def x(self) -> float:
+        return self._x
+
+    @property
+    def y(self) -> float:
+        return self._y
+
+    ## Operations
 
     def distance(self, other: Point) -> float:
-        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
+        return math.sqrt((self._x - other._x)**2 + (self._y - other._y)**2)
 
     def dot(self, other: Point) -> float:
-        return self.x * other.x + self.y * other.y
+        return self._x * other._x + self._y * other._y
 
-    def cross(self, other: Point) -> float:
-        return self.x * other.y - other.x * self.y
+    def perp_dot(self, other: Point) -> float:
+        return self._x * other._y - self._y * other._x
 
-    def orientation(self, source: Point, target: Point) -> Orientation:
+    def orientation(self, source: Point, target: Point, epsilon: float = EPSILON) -> Orientation:
         if source == target:
             raise ValueError("Source and target need to be two different points.")
-        direction = target - source
-        offset = self - source
-        cross = offset.cross(direction)
-        if abs(cross) <= EPSILON:
-            t = offset.dot(direction) / direction.dot(direction)
-            if t < 0.0:
-                return Orientation.BEHIND_SOURCE
-            elif t > 1.0:
+
+        self_direction = self - source
+        target_direction = target - source
+        signed_area = self_direction.perp_dot(target_direction)
+
+        if signed_area < -epsilon:
+            return Orientation.LEFT
+        elif signed_area > epsilon:
+            return Orientation.RIGHT
+        else:
+            a = self_direction.dot(target_direction) / target_direction.dot(target_direction)
+            # We don't need epsilon here, because the calculation of `a` ensures that
+            # `a == 0.0` if `self == source`, whereas `a == 1.0` if `self == target`.
+            if a < 0.0:
+                return Orientation.BEFORE_SOURCE
+            elif a > 1.0:
                 return Orientation.BEHIND_TARGET
             else:
                 return Orientation.BETWEEN
-        elif cross < 0.0:
-            return Orientation.LEFT
-        else:
-            return Orientation.RIGHT
+
+    ## Magic methods
         
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Point):
-            return False
-        return self.x == other.x and self.y == other.y
+            return NotImplemented
+
+        return self._x == other._x and self._y == other._y
     
     def __hash__(self) -> int:
-        return hash((self.x, self.y))
+        return hash((self._x, self._y))
     
     def __repr__(self) -> str:
-        return f"({self.x}, {self.y})"
+        return f"({self._x}, {self._y})"
 
     def __add__(self, other: Any) -> Point:
         if not isinstance(other, Point):
-            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
-        return Point(self.x + other.x, self.y + other.y)
+            return NotImplemented
+
+        return Point(self._x + other._x, self._y + other._y)
 
     def __sub__(self, other: Any) -> Point:
         if not isinstance(other, Point):
-            raise TypeError("Parameter 'other' needs to be of type 'Point'.")
-        return Point(self.x - other.x, self.y - other.y)
+            return NotImplemented
+
+        return Point(self._x - other._x, self._y - other._y)
 
     def __rmul__(self, other: Any) -> Point:
-        if not isinstance(other, float) and not isinstance(other, int):
-            raise TypeError("Parameter 'other' needs to be of type 'float' or 'int'.")
-        return Point(other * self.x, other * self.y)
+        try:
+            x = float(other * self._x)
+            y = float(other * self._y)
+        except Exception:
+            return NotImplemented
+
+        return Point(x, y)
 
     def __round__(self, ndigits: Optional[int] = None) -> Point:
-        return Point(round(self.x, ndigits), round(self.y, ndigits))
+        return Point(round(self._x, ndigits), round(self._y, ndigits))
 
-class PointReference(Point):
+class PointReference(Point):    # TODO: Make this a generic type for points with attributes.
     def __init__(self, container: list[Point], position: int):
         self._container = container
         self._position = position
@@ -125,48 +137,82 @@ class PointReference(Point):
     def y(self) -> float:
         return self.point.y
 
+    @property
+    def _x(self) -> float:
+        return self.point.x
 
-class LineSegment(GeometricObject):
+    @property
+    def _y(self) -> float:
+        return self.point.y
+
+
+class LineSegment:
     def __init__(self, p: Point, q: Point):
         if p == q:
             raise ValueError("A line segment needs two different endpoints.")
         if p.y > q.y or (p.y == q.y and p.x < q.x):
-            self.upper = p
-            self.lower = q
+            self._upper = p
+            self._lower = q
         else:
-            self.upper = q
-            self.lower = p
+            self._upper = q
+            self._lower = p
 
-    def points(self) -> Iterator[Point]:
-        yield self.upper
-        yield self.lower
+    ## Properties
 
-    def intersection(self, other: LineSegment) -> Union[None, Point, LineSegment]:
-        self_direction = self.upper - self.lower
-        other_direction = other.upper - other.lower
-        directions_cross = self_direction.cross(other_direction)
-        offset = other.lower - self.lower
+    @property
+    def upper(self) -> Point:
+        return self._upper
 
-        if abs(directions_cross) > EPSILON:
-            t = offset.cross(other_direction) / directions_cross
-            u = offset.cross(self_direction) / directions_cross
-            if -EPSILON <= t <= 1.0 + EPSILON and -EPSILON <= u <= 1.0 + EPSILON:
-                return self.lower + t * self_direction
-        elif abs(offset.cross(self_direction)) <= EPSILON:
+    @property
+    def lower(self) -> Point:
+        return self._lower
+
+    ## Operation(s)
+
+    def intersection(self, other: LineSegment, epsilon: float = EPSILON) -> Union[Point, LineSegment, None]:
+        self_direction = self._upper - self._lower
+        other_direction = other._upper - other._lower
+        lower_offset = other._lower - self._lower
+        signed_area_sd_od = self_direction.perp_dot(other_direction)
+        signed_area_lo_od = lower_offset.perp_dot(other_direction)
+        signed_area_lo_sd = lower_offset.perp_dot(self_direction)
+
+        if abs(signed_area_sd_od) > epsilon:
+            a = signed_area_lo_od / signed_area_sd_od
+            b = signed_area_lo_sd / signed_area_sd_od
+            if -epsilon <= a <= 1.0 + epsilon and -epsilon <= b <= 1.0 + epsilon:
+                return self._lower + a * self_direction
+            else:
+                return None
+
+        # Check both signed areas to ensure consistency and increase robustness.
+        if abs(signed_area_lo_od) <= epsilon or abs(signed_area_lo_sd) <= epsilon:
             self_direction_dot = self_direction.dot(self_direction)
-            t0 = offset.dot(self_direction) / self_direction_dot
-            t1 = t0 + other_direction.dot(self_direction) / self_direction_dot
-            t_min, t_max = max(0.0, min(t0, t1)), min(1.0, max(t0, t1))
-            if t_min == t_max:
-                return self.lower + t_min * self_direction
-            elif t_min < t_max:
-                return LineSegment(self.lower + t_min * self_direction, self.lower + t_max * self_direction)
+            upper_offset = other._upper - self._lower
+            a_lower = lower_offset.dot(self_direction) / self_direction_dot
+            a_upper = upper_offset.dot(self_direction) / self_direction_dot
+
+            # The inner min/max operations aren't needed in theory, because `a_lower < a_upper`
+            # should always hold. However, inaccuracies might somehow invalidate that.
+            a_lower_clipped = max(0.0, min(a_lower, a_upper))
+            a_upper_clipped = min(1.0, max(a_lower, a_upper))
+            upper = self._lower + a_upper_clipped * self_direction
+            if a_lower_clipped == a_upper_clipped:
+                return upper
+            elif a_lower_clipped < a_upper_clipped:
+                lower = self._lower + a_lower_clipped * self_direction
+                return LineSegment(upper, lower)
+            else:
+                return None
 
         return None
 
+    ## Magic methods
+
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, LineSegment):
-            return False
+            return NotImplemented
+
         return self.upper == other.upper and self.lower == other.lower
 
     def __hash__(self) -> int:

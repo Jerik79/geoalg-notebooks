@@ -1,1 +1,2 @@
-from .binary_tree import ComparisonResult, Comparator, DefaultComparator, BinaryTree, BinaryTreeDict
+from .binary_tree import ComparisonResult, Comparator, BinaryTree, BinaryTreeDict
+from .dcsp import DoublyConnectedSimplePolygon, HalfEdge, Vertex

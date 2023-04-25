@@ -4,7 +4,7 @@ import time
 from typing import Callable, Generic, Optional, TypeVar
 
 from ..geometry.core import GeometricObject, LineSegment, Point
-from ..geometry.objects import DoublyConnectedSimplePolygon
+from ..data_structures import DoublyConnectedSimplePolygon
 from .drawing import DrawingMode, LineSegmentsMode, PointsMode, PolygonMode
 
 import numpy as np
@@ -128,7 +128,7 @@ class LineSegmentSetInstance(InstanceHandle[set[LineSegment]]):
 
     @staticmethod
     def extract_points_from_raw_instance(instance: set[LineSegment]) -> list[Point]:
-        return list(chain.from_iterable(segment.points() for segment in instance))
+        return list(chain.from_iterable((segment.upper, segment.lower) for segment in instance))
 
     @property
     def default_number_of_random_points(self) -> int:
@@ -158,7 +158,7 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedSimplePolygon]):
     def add_point(self, point: Point) -> bool:
         try:
             self._instance.add_vertex(point)
-        except BaseException:
+        except Exception:
             return False
 
         return True
@@ -183,7 +183,7 @@ class SimplePolygonInstance(InstanceHandle[DoublyConnectedSimplePolygon]):
 
             try:
                 polygon = DoublyConnectedSimplePolygon.try_from_unordered_points(points)
-            except BaseException:
+            except Exception:
                 continue
 
             return self.extract_points_from_raw_instance(polygon)

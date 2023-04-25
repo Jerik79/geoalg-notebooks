@@ -20,21 +20,10 @@ class Comparator(ABC, Generic[K]):
     def compare(self, item: Any, key: K) -> ComparisonResult:
         pass
 
-class DefaultComparator(Generic[K]):
-    def compare(self, item: Any, key: K) -> ComparisonResult:
-        if item == key:
-            return ComparisonResult.MATCH
-        elif item < key:
-            return ComparisonResult.BEFORE
-        elif item > key:
-            return ComparisonResult.AFTER
-        else:
-            raise RuntimeError(f"Default comparator can't determine order for {item} and {key}.")
-
 
 # TODO: More methods like contains(key) and pop_last() could be implemented.
 class BinaryTree(Generic[K]):
-    def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
+    def __init__(self, comparator: Comparator[K]):
         self._root: Node[K, None] = Node()
         self._comparator = comparator
 
@@ -66,7 +55,7 @@ class BinaryTree(Generic[K]):
 
 # TODO: The values should be utilised more. There isn't even a get_value(key) method right now.
 class BinaryTreeDict(Generic[K, V]):
-    def __init__(self, comparator: Comparator[K] = DefaultComparator[K]()):
+    def __init__(self, comparator: Comparator[K]):
         self._root: Node[K, V] = Node()
         self._comparator = comparator
 
@@ -137,11 +126,12 @@ class Node(Generic[K, V]):
         if not self.is_empty() and not self._right.is_empty() and self._right._right._level == self._level:
             self._key, self._right._key = self._right._key, self._key
             self._value, self._right._value = self._right._value, self._value
-            self._level += 1
 
             self._left, self._right = self._right, self._left
             self._right, self._left._right = self._left._right, self._right
             self._left._left, self._left._right = self._left._right, self._left._left
+
+            self._level += 1
 
     def _adjust_after_deletion(self):
         if not self.is_empty():
@@ -252,7 +242,7 @@ class Node(Generic[K, V]):
 
     def search_matching(self, item: Any, comparator: Comparator[K]) -> Iterator[tuple[K, V]]:
         if self.is_empty():
-            return ()
+            return iter(())
 
         cr = comparator.compare(item, self._key)
         if cr is ComparisonResult.BEFORE:
